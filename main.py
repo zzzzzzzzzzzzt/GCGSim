@@ -79,7 +79,7 @@ def main(args, config, logger: Logger, run_id: int, dataset: DatasetLocal):
 
                 else:
                     current_metric                    = [val_mse        , val_rho     , val_tau     , val_prec_at_10,  val_prec_at_20, epoch]
-                    best_val_metric, best_val_paths, b_epoch = save_best_val_model_all(config, args.dataset, model, PATH_MODEL, current_metric, best_val_metric, best_val_paths, b_epoch, validation=True)
+                    best_val_metric, best_val_paths, b_epoch = save_best_val_model_all(config, args.dataset, model, PATH_MODEL, current_metric, best_val_metric, best_val_paths, b_epoch)
                     best_mse_metric                   = best_val_metric[0]
                     best_val_mse                      = best_val_metric[0]
                     best_val_rho                      = best_val_metric[1]
