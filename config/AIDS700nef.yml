@@ -3,11 +3,11 @@ dataset: "AIDS700nef"
 model_name: "GSC_GNN"
 
 GSC_GNN:
-  epochs: 20000
+  epochs: 30000
   use_val: True
   val_ratio: 0.25
-  iter_val_start: 5000
-  iter_val_every: 500
+  iter_val_start: 29000
+  iter_val_every: 10
   save_best: True
   save_best_all: True
   multilabel: False

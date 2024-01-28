@@ -101,6 +101,21 @@ class AttentionModule2(torch.nn.Module):
 
         return torch.sigmoid(torch.matmul(x, transformed_global))
 
+
+class GlobalContextAware(AttentionModule2):
+    def __init__(self, config, n_feat):
+        super(GlobalContextAware, self).__init__(config)
+        self.n_feat = n_feat
+    
+    def setup_weights(self):
+        """
+        Defining weights.
+        """
+        self.weight_matrix = torch.nn.Parameter(
+            torch.Tensor(self.n_feat, self.n_feat)
+        )
+
+
 class AttentionModule(torch.nn.Module):
     def __init__(self, config, dim_size):
         """
