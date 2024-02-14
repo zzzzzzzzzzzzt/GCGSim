@@ -5,6 +5,7 @@ import os.path as osp
 from DataHelper.DatasetLocal import DatasetLocal
 from model.GSC import GSC
 from model.SImGNN import SimGNN
+from model.DiffDecouple import DiffDecouple
 def prepare_train(self, model):
     config               = self.config
     optimizer            = getattr(torch.optim, config['optimizer'])(  params          = model.parameters(),
@@ -25,7 +26,7 @@ def prepare_model(self, dataset: DatasetLocal):
         Model_Class      = getattr    (import_module("model.GAT"), model_name)
         model            = Model_Class(config, config['hidden_dim'], dataset.nfeat, dataset.num_classes).cuda()
     if model_name in ['GSC_GNN']:
-        model            = GSC        (config, dataset.input_dim).cuda()
+        model            = DiffDecouple        (config, dataset.input_dim).cuda()
         if config['fuse_type']   == 'cat':
             in_dim       = sum        (config['gnn_filters'])
         elif config['fuse_type'] == 'stack':

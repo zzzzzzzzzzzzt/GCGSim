@@ -104,9 +104,9 @@ class AttentionModule2(torch.nn.Module):
 
 class GlobalContextAware(AttentionModule2):
     def __init__(self, config, n_feat):
-        super(GlobalContextAware, self).__init__(config)
         self.n_feat = n_feat
-    
+        super(GlobalContextAware, self).__init__(config)
+
     def setup_weights(self):
         """
         Defining weights.
