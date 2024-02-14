@@ -44,7 +44,7 @@ GSC_GNN:
   batch_size: 128
   val_batch_size: 512
   use_sim: True
-  NTN_layers: 1
+  NTN_layers: 4
   tensor_neurons: 16
   output_comb: True
   use_ssl: True

@@ -67,8 +67,16 @@ class DiffDecouple(nn.Module):
             ), eps=True))
         else:
             raise NotImplementedError("Unknown GNN-Operator.")
-        
-        self.score_sim_layer        = nn.Sequential(nn.Linear(self.config['tensor_neurons']*self.num_filter, self.config['tensor_neurons']),
+
+        if self.config['NTN_layers'] == 1:
+            self.NTN_list.append(TensorNetworkModule(self.config, 2*self.filters[-1]))
+        elif self.config['NTN_layers'] == self.num_filter:
+            for i in range(self.num_filter):
+                self.NTN_list.append(TensorNetworkModule(self.config, 2*self.filters[i]))
+        else:
+            raise NotImplementedError("Error NTN_layer number.")
+         
+        self.score_sim_layer        = nn.Sequential(nn.Linear(self.config['tensor_neurons']*self.config['NTN_layers'], self.config['tensor_neurons']),
                                                     nn.ReLU(),
                                                     nn.Linear(self.config['tensor_neurons'] , 1))
         
@@ -76,7 +84,6 @@ class DiffDecouple(nn.Module):
         for i in range(self.num_filter):
             self.com_list.append(GlobalContextAware(self.config, self.filters[i]))
             self.pri_list.append(GlobalContextAware(self.config, self.filters[i]))
-            self.NTN_list.append(TensorNetworkModule(self.config, 2*self.filters[i]))
 
     def forward(self, data):
         edge_index_1                = data['g1'].edge_index.cuda()
@@ -170,11 +177,14 @@ class DiffDecouple(nn.Module):
                         common_feature_2,
                         private_feature_1, 
                         private_feature_2):
-        
-        feature_1 = [torch.cat((common_feature_1[i], private_feature_1[i]), dim=-1) for i in range(self.num_filter)]
-        feature_2 = [torch.cat((common_feature_2[i], private_feature_2[i]), dim=-1) for i in range(self.num_filter)]
-
-        for i in range(self.num_filter):      
+        if self.config['NTN_layers'] != 1:
+            feature_1 = [torch.cat((common_feature_1[i], private_feature_1[i]), dim=-1) for i in range(self.num_filter)]
+            feature_2 = [torch.cat((common_feature_2[i], private_feature_2[i]), dim=-1) for i in range(self.num_filter)]
+        else:
+            feature_1 = [torch.cat((common_feature_1[-1], private_feature_1[-1]), dim=-1)]
+            feature_2 = [torch.cat((common_feature_2[-1], private_feature_2[-1]), dim=-1)]
+            
+        for i in range(self.config['NTN_layers']):
             ntn_score               = (
                                         self.NTN_list[i](feature_1[i], feature_2[i])
                                         if i == 0
