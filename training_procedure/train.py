@@ -2,10 +2,14 @@
 import torch.nn as nn
 import torch_geometric.transforms as T
 from torch_geometric.nn.conv.gcn_conv import gcn_norm
-
+import torch
 def train(self, graph_batch, model, loss_func, optimizer, target, dataset = None):
     model.train(True)
 
+    # debug
+    if torch.where(torch.isfinite(target), 0.0, 1.0).sum().item() > 0:
+        raise NotImplementedError("Error target not finite")
+    
     config                        = self.config   
     use_ssl                       = config.get('use_ssl', False)  
     optimizer.zero_grad()
