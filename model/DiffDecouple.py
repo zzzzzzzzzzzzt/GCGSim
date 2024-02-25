@@ -105,10 +105,6 @@ class DiffDecouple(nn.Module):
         conv_source_1               = torch.clone(features_1)
         conv_source_2               = torch.clone(features_2)
         
-        # debug
-        if torch.where(torch.isfinite(conv_source_1), 0.0, 1.0).sum().item() > 0 or \
-            torch.where(torch.isfinite(conv_source_2), 0.0, 1.0).sum().item() > 0:
-            raise NotImplementedError("Error conv_source not finite")
         
         common_feature_1            = list()
         common_feature_2            = list()
@@ -134,11 +130,6 @@ class DiffDecouple(nn.Module):
         ntn_score                   = self.compute_ntn_score(common_feature_1, common_feature_2, private_feature_1, private_feature_2)
         decouple_loss               = self.compute_decouple_loss(common_feature_1, common_feature_2, private_feature_1, private_feature_2)
 
-        # debug
-        if torch.isinf(decouple_loss):
-            raise NotImplementedError("Error decouple_loss inf")
-        elif torch.isnan(decouple_loss):
-            raise NotImplementedError("Error decouple_loss nan")
         
         return ntn_score, decouple_loss
     
@@ -146,16 +137,6 @@ class DiffDecouple(nn.Module):
                             common_feature_2, 
                             private_feature_1, 
                             private_feature_2):
-        # debug
-        for i in range(self.num_filter):
-            if torch.where(torch.isfinite(common_feature_1[i]), 0.0, 1.0).sum().item() > 0:
-                raise NotImplementedError("Error common_feature_1 not finite")
-            elif torch.where(torch.isfinite(common_feature_2[i]), 0.0, 1.0).sum().item() > 0:
-                raise NotImplementedError("Error common_feature_2 not finite")
-            elif torch.where(torch.isfinite(private_feature_1[i]), 0.0, 1.0).sum().item() > 0:
-                raise NotImplementedError("Error private_feature_1 not finite")
-            elif torch.where(torch.isfinite(private_feature_1[i]), 0.0, 1.0).sum().item() > 0:
-                raise NotImplementedError("Error private_feature_1 not finite")
         
         f                           = lambda x: torch.exp(x / self.config.get('tau', 1))
         for i in range(self.num_filter):
@@ -196,15 +177,6 @@ class DiffDecouple(nn.Module):
                                         if i == 0
                                         else torch.cat((sim_pri, f(F.cosine_similarity(common_feature_2[i], private_feature_2[i], dim=-1))), dim=0)
                                         )
-        # debug
-        if not torch.isfinite(cor_loss_1.mean()):
-            raise NotImplementedError("Error cor_loss_1 not isfinite")
-        elif not torch.isfinite(cor_loss_2.mean()):
-            raise NotImplementedError("Error cor_loss_2 not isfinite")
-        elif not torch.isfinite(sim_com.mean()):
-            raise NotImplementedError("Error sim_com not isfinite")
-        elif not torch.isfinite(sim_pri.mean()):
-            raise NotImplementedError("Error sim_pri not isfinite")
         
         return -torch.log(sim_com/(sim_com + sim_pri)).mean() + 0.5*(cor_loss_1 + cor_loss_2).mean()
 
@@ -241,11 +213,6 @@ class DiffDecouple(nn.Module):
         x2_mean = torch.mean(x2, dim=-1, keepdim=True)
         x2 = x2 - x2_mean
 
-        # debug
-        if torch.where(torch.eq(x1, 0.0), 1.0, 0.0).sum().item() > 0 or \
-            torch.where(torch.eq(x2, 0.0), 1.0, 0.0).sum().item():
-            print(x1)
-            print(x2)
 
         # Compute the cross correlation
         sigma1 = torch.sqrt(torch.mean(x1.pow(2), dim=-1))

@@ -6,9 +6,6 @@ import torch
 def train(self, graph_batch, model, loss_func, optimizer, target, dataset = None):
     model.train(True)
 
-    # debug
-    if torch.where(torch.isfinite(target), 0.0, 1.0).sum().item() > 0:
-        raise NotImplementedError("Error target not finite")
     
     config                        = self.config   
     use_ssl                       = config.get('use_ssl', False)  
@@ -23,10 +20,9 @@ def train(self, graph_batch, model, loss_func, optimizer, target, dataset = None
         # graph_forward.render(filename='graph/DiffDecouple163', view=False, format='pdf')
 
         loss                      = loss_func(prediction, target) if not use_ssl else loss_func(prediction, target)+loss_cl
-        with torch.autograd.detect_anomaly():
-            loss.backward()
-            if self.config.get('clip_grad', False):
-                nn.utils.clip_grad_norm_(model.parameters(), 1)
+        loss.backward()
+        if self.config.get('clip_grad', False):
+            nn.utils.clip_grad_norm_(model.parameters(), 1)
         # else:
         #     prediction_diff, prediction_sim = model(graph_batch)
         #     loss = (loss_func(prediction_diff, target) + loss_func(prediction_sim, target))/2
