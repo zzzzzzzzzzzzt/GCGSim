@@ -11,7 +11,7 @@ from model.layers import AttentionModule, MLPLayers, TensorNetworkModule, FF, Gl
 from utils.gan_losses import get_negative_expectation, get_positive_expectation
 from collections import OrderedDict, defaultdict
 import numpy as np
-
+from torchmetrics.regression import PearsonCorrCoef
 
 class DiffDecouple(nn.Module):
     def __init__(self, config, n_feat):
@@ -19,6 +19,7 @@ class DiffDecouple(nn.Module):
         self.config                 = config
         self.batchsize              = self.config['batch_size']
         self.n_feat                 = n_feat
+        self.pearsoncorrcoef        = PearsonCorrCoef(self.config['batch_size'])
         self.setup_layers()
     
     def setup_layers(self):
@@ -159,15 +160,19 @@ class DiffDecouple(nn.Module):
         f                           = lambda x: torch.exp(x / self.config.get('tau', 1))
         for i in range(self.num_filter):
             # compute correlation coefficient between common feature and private feature
+
+            # _common_feature_1, _private_feature_1 = self.shape_for_corr(common_feature_1[i], private_feature_1[i])
+            # _common_feature_2, _private_feature_2 = self.shape_for_corr(common_feature_2[i], private_feature_2[i])
+
             cor_loss_1              = (
-                                        self.compute_corr(common_feature_1[i], private_feature_1[i])
+                                        self.cal_corr(common_feature_1[i], private_feature_1[i])
                                         if i == 0
-                                        else torch.cat((cor_loss_1, self.compute_corr(common_feature_1[i], private_feature_1[i])), dim=0)
+                                        else torch.cat((cor_loss_1, self.cal_corr(common_feature_1[i], private_feature_1[i])), dim=0)
                                         )
             cor_loss_2              = (
-                                        self.compute_corr(common_feature_2[i], private_feature_2[i])
+                                        self.cal_corr(common_feature_2[i], private_feature_2[i])
                                         if i == 0
-                                        else torch.cat((cor_loss_2, self.compute_corr(common_feature_2[i], private_feature_2[i])), dim=0)
+                                        else torch.cat((cor_loss_2, self.cal_corr(common_feature_2[i], private_feature_2[i])), dim=0)
                                         )
             
             # compute similarity between features
@@ -236,6 +241,12 @@ class DiffDecouple(nn.Module):
         x2_mean = torch.mean(x2, dim=-1, keepdim=True)
         x2 = x2 - x2_mean
 
+        # debug
+        if torch.where(torch.eq(x1, 0.0), 1.0, 0.0).sum().item() > 0 or \
+            torch.where(torch.eq(x2, 0.0), 1.0, 0.0).sum().item():
+            print(x1)
+            print(x2)
+
         # Compute the cross correlation
         sigma1 = torch.sqrt(torch.mean(x1.pow(2), dim=-1))
         sigma2 = torch.sqrt(torch.mean(x2.pow(2), dim=-1))
@@ -243,5 +254,36 @@ class DiffDecouple(nn.Module):
 
         return corr
 
+    def cal_corr(self, x1, x2, eps = 1e-7):
+        vx = x1 - torch.mean(x1, dim=-1, keepdim=True)
+        vy = x2 - torch.mean(x2, dim=-1, keepdim=True)
+        
+        corr = torch.abs(torch.sum(vx * vy, dim=-1))/(torch.norm(vx, dim=-1) * torch.norm(vy, dim=-1) + eps)  # use Pearson correlation
+
+        return corr
+    
+    def shape_for_corr(self, x1, x2):
+        if x1.size()[0] == self.config['batch_size']:
+            out_x1 = x1.T
+            out_x2 = x2.T
+        else:
+            pad_num = self.config['batch_size'] - x1.size()[0]
+            out_x1 = F.pad(x1, 
+                           (0, 0, 0, pad_num), 
+                           mode='constant', 
+                           value=0).T
+
+            out_x2 = F.pad(x2, 
+                           (0, 0, 0, pad_num), 
+                           mode='constant', 
+                           value=0).T
+            
+        return out_x1, out_x2
+    
+    def log_param(self, writer, log_i):
+        for name, param in self.named_parameters():
+            if 'gnn_list' in name:
+                writer.add_histogram('param/{}'.format(name), param, log_i)
+                writer.add_histogram('param_grad/{}'.format(name), param.grad, log_i)
 
     

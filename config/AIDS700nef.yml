@@ -25,7 +25,7 @@ GSC_GNN:
   feat_norm: False
   synth: False
   scale: 1
-  gnn_encoder: 'GCN'
+  gnn_encoder: 'GIN'
   multi_contrast: False
   gnn_filters: [64, 64, 32, 16]
   dropout: 0.0
@@ -54,6 +54,7 @@ GSC_GNN:
   model_name: 'GSC_GNN'
   dataset_name: 'AIDS700nef'
   sep: False
+  board_log: False
 
 SimGNN:
   patience: -1

@@ -17,10 +17,16 @@ def train(self, graph_batch, model, loss_func, optimizer, target, dataset = None
     if config['model_name'] in ['GSC_GNN']: 
         # if not config['use_sim']:
         prediction, loss_cl       = model(graph_batch)
+
+        # from torchviz import make_dot
+        # graph_forward = make_dot(model(graph_batch))
+        # graph_forward.render(filename='graph/DiffDecouple163', view=False, format='pdf')
+
         loss                      = loss_func(prediction, target) if not use_ssl else loss_func(prediction, target)+loss_cl
-        loss.backward()
-        if self.config.get('clip_grad', False):
-            nn.utils.clip_grad_norm_(model.parameters(), 1)
+        with torch.autograd.detect_anomaly():
+            loss.backward()
+            if self.config.get('clip_grad', False):
+                nn.utils.clip_grad_norm_(model.parameters(), 1)
         # else:
         #     prediction_diff, prediction_sim = model(graph_batch)
         #     loss = (loss_func(prediction_diff, target) + loss_func(prediction_sim, target))/2

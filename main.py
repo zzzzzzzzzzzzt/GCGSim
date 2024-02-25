@@ -41,6 +41,11 @@ def main(args, config, logger: Logger, run_id: int, dataset: DatasetLocal):
     b_epoch                          = 0
     if config['save_best']:
         PATH_MODEL                   = os.path.join(os.path.join(os.getcwd(),'model_saved'), args.dataset, datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))    
+
+    if config['board_log']: 
+        from tensorboardX import SummaryWriter
+        writer                       = SummaryWriter(log_dir=PATH_MODEL)
+        log_i                        = 0
     for epoch in pbar:
         if not custom:
             batches                  = dataset.create_batches(config)   # 128对 graph-pair
@@ -56,6 +61,10 @@ def main(args, config, logger: Logger, run_id: int, dataset: DatasetLocal):
             model, loss              = T.train(data, model, loss_func, optimizer, target)   
             main_index               = main_index + batch_pair[0].num_graphs               
             loss_sum                 = loss_sum + loss                                    
+            if config['board_log']:
+                writer               .add_scalar('loss', loss, log_i)
+                model                .log_param(writer, log_i)
+                log_i                = log_i + 1
         loss                         = loss_sum / main_index                              
         loss_list.append(loss)
 
