@@ -21,7 +21,7 @@ GSC_GNN:
   optimizer: 'Adam'
   num_layers: 2
   activation: 'relu'
-  multirun: 1
+  multirun: 5
   feat_norm: False
   synth: False
   scale: 1

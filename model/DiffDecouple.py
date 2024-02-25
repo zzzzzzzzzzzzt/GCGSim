@@ -178,7 +178,7 @@ class DiffDecouple(nn.Module):
                                         else torch.cat((sim_pri, f(F.cosine_similarity(common_feature_2[i], private_feature_2[i], dim=-1))), dim=0)
                                         )
         
-        return -torch.log(sim_com/(sim_com + sim_pri)).mean() + 0.5*(cor_loss_1 + cor_loss_2).mean()
+        return -torch.log(sim_com/(sim_com + sim_pri)).mean() + cor_loss_1.mean() + cor_loss_2.mean()
 
     def compute_ntn_score(self, common_feature_1, 
                         common_feature_2,
