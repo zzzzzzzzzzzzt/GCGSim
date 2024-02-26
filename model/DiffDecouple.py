@@ -176,13 +176,13 @@ class DiffDecouple(nn.Module):
                 _common_feature_1,  \
                 _common_feature_2,  \
                 _private_feature_1, \
-                _private_feature_2  = self.deepset_output()
+                _private_feature_2  = self.deepset_output(conv_source_1, conv_source_2, batch_1, batch_2, i)
 
                 common_feature_1    .append(_common_feature_1)
                 common_feature_2    .append(_common_feature_2)
                 private_feature_1   .append(_private_feature_1)
                 private_feature_2   .append(_private_feature_2)
-                
+
         # computer score and loss
         ntn_score                   = self.compute_ntn_score(common_feature_1, common_feature_2, private_feature_1, private_feature_2)
         decouple_loss               = self.compute_decouple_loss(common_feature_1, common_feature_2, private_feature_1, private_feature_2)

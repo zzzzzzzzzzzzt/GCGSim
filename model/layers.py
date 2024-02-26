@@ -118,7 +118,7 @@ class GlobalContextAware(AttentionModule2):
 
 class Node2GraphAttention(torch.nn.Module):
     def __init__(self, config):
-        super(Node2GraphAttention).__init__()
+        super(Node2GraphAttention, self).__init__()
         self.config = config
 
     def forward(self, n_embedding, g_embedding, n_batch, size=None):

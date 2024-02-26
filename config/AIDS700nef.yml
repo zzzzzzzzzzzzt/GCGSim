@@ -21,7 +21,7 @@ GSC_GNN:
   optimizer: 'Adam'
   num_layers: 2
   activation: 'relu'
-  multirun: 5
+  multirun: 1
   feat_norm: False
   synth: False
   scale: 1
@@ -45,7 +45,7 @@ GSC_GNN:
   batch_size: 128
   val_batch_size: 512
   use_sim: True
-  NTN_layers: 1
+  NTN_layers: 4
   tensor_neurons: 16
   output_comb: True
   use_ssl: True
