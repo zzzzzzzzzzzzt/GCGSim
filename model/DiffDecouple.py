@@ -88,7 +88,12 @@ class DiffDecouple(nn.Module):
         self.score_sim_layer        = nn.Sequential(nn.Linear(self.config['tensor_neurons']*self.config['NTN_layers'], self.config['tensor_neurons']),
                                                     nn.ReLU(),
                                                     nn.Linear(self.config['tensor_neurons'] , 1))
-        
+        if  self.config['reconstruction'] == True:
+            self.rec_MLP            = nn.Sequential(nn.Linear(2*self.filters[-1],2*self.filters[-1]),
+                                                    nn.ReLU(),
+                                                    nn.Linear(2*self.filters[-1],self.filters[-1]),
+                                                    nn.ReLU())
+            
     def setup_disentangle(self):
         if self.config['graph_encoder'] == 'GCA':
             for i in range(self.num_filter):
@@ -173,10 +178,18 @@ class DiffDecouple(nn.Module):
                 private_feature_1   .append(self.pri_list[i](conv_source_1, batch_1))
                 private_feature_2   .append(self.pri_list[i](conv_source_2, batch_2))
             elif self.config['graph_encoder'] == 'deepset':
+                output_g            = (
+                                        True
+                                        if i == self.num_filter-1
+                                        else False
+                                        )
+                
                 _common_feature_1,  \
                 _common_feature_2,  \
                 _private_feature_1, \
-                _private_feature_2  = self.deepset_output(conv_source_1, conv_source_2, batch_1, batch_2, i)
+                _private_feature_2, \
+                g1_pool,            \
+                g2_pool             = self.deepset_output(conv_source_1, conv_source_2, batch_1, batch_2, i, output_g)
 
                 common_feature_1    .append(_common_feature_1)
                 common_feature_2    .append(_common_feature_2)
@@ -186,9 +199,18 @@ class DiffDecouple(nn.Module):
         # computer score and loss
         ntn_score                   = self.compute_ntn_score(common_feature_1, common_feature_2, private_feature_1, private_feature_2)
         decouple_loss               = self.compute_decouple_loss(common_feature_1, common_feature_2, private_feature_1, private_feature_2)
+        rec_loss                    = (
+                                        self.reconstruction_loss(common_feature_1[-1],
+                                                                 common_feature_2[-1],
+                                                                 private_feature_1[-1],
+                                                                 private_feature_2[-1],
+                                                                 g1_pool,
+                                                                 g2_pool)
+                                        if self.config['reconstruction'] == True
+                                        else 0
+                                        ) 
 
-        
-        return ntn_score, decouple_loss
+        return ntn_score, decouple_loss + rec_loss
     
     def compute_decouple_loss(self, common_feature_1,
                             common_feature_2, 
@@ -256,6 +278,16 @@ class DiffDecouple(nn.Module):
                                         )
             
         return torch.sigmoid(self.score_sim_layer(ntn_score).squeeze())
+
+    def reconstruction_loss(self, com_1, com_2, pri_1, pri_2, g_1, g_2):
+        loss_fun = nn.MSELoss(reduction='sum')
+        loss_1 = self._rec_loss(com_1, pri_1, g_1, loss_fun)
+        loss_2 = self._rec_loss(com_2, pri_2, g_2, loss_fun)
+        return loss_1 + loss_2
+    
+    def _rec_loss(self, common_feature, private_feature, grap_embedding, loss_fun):
+        reconstruction = self.rec_MLP(torch.cat((common_feature,private_feature), dim=-1))
+        return loss_fun(reconstruction, grap_embedding)
     
     def convolutional_pass(self, enc, edge_index, x):
         feat = enc(x, edge_index)
@@ -263,7 +295,7 @@ class DiffDecouple(nn.Module):
         feat = F.dropout(feat, p = self.config['dropout'], training=self.training)
         return feat
 
-    def deepset_output(self, x1, x2, batch1, batch2, filter_idx):
+    def deepset_output(self, x1, x2, batch1, batch2, filter_idx, out=False):
         # deepset inner pass
         deepsets_inner_1 = self.act_inner(self.deepset_inner[filter_idx](x1))
         deepsets_inner_2 = self.act_inner(self.deepset_inner[filter_idx](x2))
@@ -283,7 +315,10 @@ class DiffDecouple(nn.Module):
         private_feature_1 = self.act_outer(self.p_deepset_outer[filter_idx](g1_embedding_att))
         private_feature_2 = self.act_outer(self.p_deepset_outer[filter_idx](g2_embedding_att))
 
-        return common_feature_1, common_feature_2, private_feature_1, private_feature_2
+        out_1, out_2 = None, None
+        if out:
+            out_1, out_2 = pool_1, pool_2
+        return common_feature_1, common_feature_2, private_feature_1, private_feature_2, out_1, out_2
     
     def _pool(self, feat, batch, size = None):
         size = (batch[-1].item() + 1 if size is None else size)   # 一个batch中的图数

@@ -56,6 +56,7 @@ GSC_GNN:
   dataset_name: 'AIDS700nef'
   sep: False
   board_log: False
+  reconstruction: True
 
 SimGNN:
   patience: -1
