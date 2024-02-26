@@ -33,10 +33,17 @@ class DiffDecouple(nn.Module):
             for i in range(self.num_filter):
                 filters.append(self.filters[0])
             self.filters            = filters
-        self.gnn_list               = nn.ModuleList()
-        self.com_list               = nn.ModuleList()  
-        self.pri_list               = nn.ModuleList()  
+        self.gnn_list               = nn.ModuleList()  
         self.NTN_list               = nn.ModuleList()
+        if self.config['graph_encoder'] == 'GCA':
+            self.com_list           = nn.ModuleList()  
+            self.pri_list           = nn.ModuleList()
+        elif self.config['graph_encoder'] == 'deepset':
+            self.deepset_inner      = nn.ModuleList()  
+            self.c_deepset_outer    = nn.ModuleList()
+            self.p_deepset_outer    = nn.ModuleList()
+            self.act_inner          = getattr(F, self.config.get('deepsets_inner_act', 'relu'))
+            self.act_outer          = getattr(F, self.config.get('deepsets_outer_act', 'relu'))
 
         self.setup_backbone()
         if self.config.get('setup_disentangle', True):
@@ -82,9 +89,47 @@ class DiffDecouple(nn.Module):
                                                     nn.Linear(self.config['tensor_neurons'] , 1))
         
     def setup_disentangle(self):
-        for i in range(self.num_filter):
-            self.com_list.append(GlobalContextAware(self.config, self.filters[i]))
-            self.pri_list.append(GlobalContextAware(self.config, self.filters[i]))
+        if self.config['graph_encoder'] == 'GCA':
+            for i in range(self.num_filter):
+                self.com_list.append(GlobalContextAware(self.config, self.filters[i]))
+                self.pri_list.append(GlobalContextAware(self.config, self.filters[i]))
+        elif self.config['graph_encoder'] == 'deepset':
+            for i in range(self.num_filter):
+                if self.config['inner_mlp']:
+                    if self.config.get('inner_mlp_layers', 1) == 1:
+                        self.deepset_inner.append(MLPLayers(self.filters[i], 
+                                                             self.filters[i], 
+                                                             None, 
+                                                             num_layers=1, 
+                                                             use_bn=False))
+                    else:
+                        self.deepset_inner.append(MLPLayers(self.filters[i], 
+                                                             self.filters[i], 
+                                                             self.filters[i], 
+                                                             num_layers=self.config['inner_mlp_layers'], 
+                                                             use_bn=False))
+                if self.config.get('outer_mlp_layers', 1) == 1:
+                    self.c_deepset_outer.append(MLPLayers(self.filters[i], 
+                                                          self.filters[i], 
+                                                          None, 
+                                                          num_layers=1, 
+                                                          use_bn=False))
+                    self.p_deepset_outer.append(MLPLayers(self.filters[i], 
+                                                          self.filters[i], 
+                                                          None, 
+                                                          num_layers=1, 
+                                                          use_bn=False))
+                else:
+                    self.c_deepset_outer.append(MLPLayers(self.filters[i], 
+                                                          self.filters[i], 
+                                                          self.filters[i], 
+                                                          num_layers=self.config['outer_mlp_layers'], 
+                                                          use_bn=False))
+                    self.p_deepset_outer.append(MLPLayers(self.filters[i], 
+                                                          self.filters[i], 
+                                                          self.filters[i], 
+                                                          num_layers=self.config['outer_mlp_layers'], 
+                                                          use_bn=False))
 
     def forward(self, data):
         edge_index_1                = data['g1'].edge_index.cuda()
@@ -118,13 +163,15 @@ class DiffDecouple(nn.Module):
                 conv_source_1       = self.gnn_list[i](conv_source_1, edge_index_1)
                 conv_source_2       = self.gnn_list[i](conv_source_2, edge_index_2)
 
-            # generate common feature
-            common_feature_1        .append(self.com_list[i](conv_source_1, batch_1))
-            common_feature_2        .append(self.com_list[i](conv_source_2, batch_2))
+            if self.config['graph_encoder'] == 'GCA': 
+                # generate common feature
+                common_feature_1    .append(self.com_list[i](conv_source_1, batch_1))
+                common_feature_2    .append(self.com_list[i](conv_source_2, batch_2))
 
-            # generate private feature
-            private_feature_1       .append(self.pri_list[i](conv_source_1, batch_1))
-            private_feature_2       .append(self.pri_list[i](conv_source_2, batch_2))
+                # generate private feature
+                private_feature_1   .append(self.pri_list[i](conv_source_1, batch_1))
+                private_feature_2   .append(self.pri_list[i](conv_source_2, batch_2))
+            elif self.config['graph_encoder'] == 'deepset':
             
         # computer score and loss
         ntn_score                   = self.compute_ntn_score(common_feature_1, common_feature_2, private_feature_1, private_feature_2)
@@ -205,7 +252,22 @@ class DiffDecouple(nn.Module):
         feat = F.relu(feat)
         feat = F.dropout(feat, p = self.config['dropout'], training=self.training)
         return feat
-    
+
+    def deepset_output(self, x1, x2, batch1, batch2, filter_idx):
+        # deepset inner pass
+        deepsets_inner_1 = self.act_inner(self.deepset_inner[filter_idx](x1))
+        deepsets_inner_2 = self.act_inner(self.deepset_inner[filter_idx](x2))
+
+        pool_1 = self._pool(deepsets_inner_1, batch1)
+        pool_2 = self._pool(deepsets_inner_2, batch2)
+
+        
+
+    def _pool(self, feat, batch, size = None):
+        size = (batch[-1].item() + 1 if size is None else size)   # 一个batch中的图数
+        pool = global_add_pool(feat, batch, size=size) if self.config['pooling']=='add' else global_mean_pool(feat, batch, size=size) 
+        return pool
+        
     def compute_corr(self, x1, x2):
         # Subtract the mean
         x1_mean = torch.mean(x1, dim=-1, keepdim=True)

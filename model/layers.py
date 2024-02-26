@@ -116,6 +116,15 @@ class GlobalContextAware(AttentionModule2):
         )
 
 
+class Node2GraphAttention(torch.nn.Module):
+    def __init__(self, config):
+        super(Node2GraphAttention).__init__()
+        self.config = config
+
+    def forward(self, n_embedding, g_embedding, n_batch):
+        coefs = torch.sigmoid((n_embedding * g_embedding[n_batch]).sum(dim=1))
+
+        
 class AttentionModule(torch.nn.Module):
     def __init__(self, config, dim_size):
         """
