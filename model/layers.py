@@ -121,10 +121,14 @@ class Node2GraphAttention(torch.nn.Module):
         super(Node2GraphAttention).__init__()
         self.config = config
 
-    def forward(self, n_embedding, g_embedding, n_batch):
+    def forward(self, n_embedding, g_embedding, n_batch, size=None):
+        size = n_batch[-1].item() + 1 if size is None else size
         coefs = torch.sigmoid((n_embedding * g_embedding[n_batch]).sum(dim=1))
+        weighted = coefs.unsqueeze(-1) * n_embedding
 
-        
+        return scatter_add(weighted, n_batch, dim=0, dim_size=size)
+
+
 class AttentionModule(torch.nn.Module):
     def __init__(self, config, dim_size):
         """

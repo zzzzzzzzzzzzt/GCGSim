@@ -7,7 +7,7 @@ import torch.nn as nn
 from torch_geometric.nn import GCNConv, GINConv, GATConv
 import torch.nn.functional as F   
 from torch_geometric.nn.glob import global_add_pool, global_mean_pool
-from model.layers import AttentionModule, MLPLayers, TensorNetworkModule, FF, GlobalContextAware
+from model.layers import AttentionModule, MLPLayers, TensorNetworkModule, FF, GlobalContextAware, Node2GraphAttention
 from utils.gan_losses import get_negative_expectation, get_positive_expectation
 from collections import OrderedDict, defaultdict
 import numpy as np
@@ -42,6 +42,7 @@ class DiffDecouple(nn.Module):
             self.deepset_inner      = nn.ModuleList()  
             self.c_deepset_outer    = nn.ModuleList()
             self.p_deepset_outer    = nn.ModuleList()
+            self.n2gatt             = Node2GraphAttention(self.config)
             self.act_inner          = getattr(F, self.config.get('deepsets_inner_act', 'relu'))
             self.act_outer          = getattr(F, self.config.get('deepsets_outer_act', 'relu'))
 
@@ -98,34 +99,34 @@ class DiffDecouple(nn.Module):
                 if self.config['inner_mlp']:
                     if self.config.get('inner_mlp_layers', 1) == 1:
                         self.deepset_inner.append(MLPLayers(self.filters[i], 
-                                                             self.filters[i], 
-                                                             None, 
-                                                             num_layers=1, 
-                                                             use_bn=False))
+                                                            self.filters[i], 
+                                                            None, 
+                                                            num_layers=1, 
+                                                            use_bn=False))
                     else:
                         self.deepset_inner.append(MLPLayers(self.filters[i], 
-                                                             self.filters[i], 
-                                                             self.filters[i], 
-                                                             num_layers=self.config['inner_mlp_layers'], 
-                                                             use_bn=False))
+                                                            self.filters[i], 
+                                                            self.filters[i], 
+                                                            num_layers=self.config['inner_mlp_layers'], 
+                                                            use_bn=False))
                 if self.config.get('outer_mlp_layers', 1) == 1:
-                    self.c_deepset_outer.append(MLPLayers(self.filters[i], 
+                    self.c_deepset_outer.append(MLPLayers(2*self.filters[i], 
                                                           self.filters[i], 
                                                           None, 
                                                           num_layers=1, 
                                                           use_bn=False))
-                    self.p_deepset_outer.append(MLPLayers(self.filters[i], 
+                    self.p_deepset_outer.append(MLPLayers(2*self.filters[i], 
                                                           self.filters[i], 
                                                           None, 
                                                           num_layers=1, 
                                                           use_bn=False))
                 else:
-                    self.c_deepset_outer.append(MLPLayers(self.filters[i], 
+                    self.c_deepset_outer.append(MLPLayers(2*self.filters[i], 
                                                           self.filters[i], 
                                                           self.filters[i], 
                                                           num_layers=self.config['outer_mlp_layers'], 
                                                           use_bn=False))
-                    self.p_deepset_outer.append(MLPLayers(self.filters[i], 
+                    self.p_deepset_outer.append(MLPLayers(2*self.filters[i], 
                                                           self.filters[i], 
                                                           self.filters[i], 
                                                           num_layers=self.config['outer_mlp_layers'], 
@@ -172,7 +173,16 @@ class DiffDecouple(nn.Module):
                 private_feature_1   .append(self.pri_list[i](conv_source_1, batch_1))
                 private_feature_2   .append(self.pri_list[i](conv_source_2, batch_2))
             elif self.config['graph_encoder'] == 'deepset':
-            
+                _common_feature_1,  \
+                _common_feature_2,  \
+                _private_feature_1, \
+                _private_feature_2  = self.deepset_output()
+
+                common_feature_1    .append(_common_feature_1)
+                common_feature_2    .append(_common_feature_2)
+                private_feature_1   .append(_private_feature_1)
+                private_feature_2   .append(_private_feature_2)
+                
         # computer score and loss
         ntn_score                   = self.compute_ntn_score(common_feature_1, common_feature_2, private_feature_1, private_feature_2)
         decouple_loss               = self.compute_decouple_loss(common_feature_1, common_feature_2, private_feature_1, private_feature_2)
@@ -261,8 +271,20 @@ class DiffDecouple(nn.Module):
         pool_1 = self._pool(deepsets_inner_1, batch1)
         pool_2 = self._pool(deepsets_inner_2, batch2)
 
+        att_1with_2 = self.n2gatt(deepsets_inner_1, pool_2, batch1)
+        att_2with_1 = self.n2gatt(deepsets_inner_2, pool_1, batch2)
         
+        g1_embedding_att = torch.cat((pool_1, att_1with_2), dim=-1)
+        g2_embedding_att = torch.cat((pool_2, att_2with_1), dim=-1)
 
+        common_feature_1 = self.act_outer(self.c_deepset_outer[filter_idx](g1_embedding_att))
+        common_feature_2 = self.act_outer(self.c_deepset_outer[filter_idx](g2_embedding_att))
+
+        private_feature_1 = self.act_outer(self.p_deepset_outer[filter_idx](g1_embedding_att))
+        private_feature_2 = self.act_outer(self.p_deepset_outer[filter_idx](g2_embedding_att))
+
+        return common_feature_1, common_feature_2, private_feature_1, private_feature_2
+    
     def _pool(self, feat, batch, size = None):
         size = (batch[-1].item() + 1 if size is None else size)   # 一个batch中的图数
         pool = global_add_pool(feat, batch, size=size) if self.config['pooling']=='add' else global_mean_pool(feat, batch, size=size) 
