@@ -179,14 +179,14 @@ class DatasetLocal(dataset):
             torch.from_numpy(np.exp([(-el * config.get('scale', 1)) for el in normalized_ged])).view(-1).float()
         )
         new_data['norm_ged'] = (
-            torch.from_numpy(np.exp([(el) for el in normalized_ged])).view(-1).float()
+            torch.from_numpy(np.array([(el) for el in normalized_ged])).view(-1).float()    # nged
         )
         ged = self.trainval_ged_matrix[
             batch[0]["i"].reshape(-1).tolist(), batch[1]["i"].reshape(-1).tolist()
         ].tolist()
 
         new_data["target_ged"] = (
-            torch.from_numpy(np.array([(el) for el in ged])).view(-1).float()   # nged
+            torch.from_numpy(np.array([(el) for el in ged])).view(-1).float()   
         )
         return new_data
 
