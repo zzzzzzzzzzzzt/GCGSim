@@ -44,7 +44,7 @@ def save_fig(plt, dir, fn, print_path=True):
     if dir is None or fn is None:
         return plt_cnt
     final_path_without_ext = '{}/{}'.format(dir, fn)
-    for ext in ['pdf']:
+    for ext in ['png']:
         full_path = final_path_without_ext + '.' + ext
         create_dir_if_not_exists(dirname(full_path))
         try:
