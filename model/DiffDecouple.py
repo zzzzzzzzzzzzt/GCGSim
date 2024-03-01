@@ -181,7 +181,8 @@ class DiffDecouple(nn.Module):
             elif self.config['graph_encoder'] == 'deepset':
                 output_g            = (
                                         True
-                                        if i == self.num_filter-1
+                                        if (i == self.num_filter-1 and self.config['reconstruction'] == True) or \
+                                            self.config['sim_rat'] == True
                                         else False
                                         )
                 
@@ -192,10 +193,17 @@ class DiffDecouple(nn.Module):
                 g1_pool,            \
                 g2_pool             = self.deepset_output(conv_source_1, conv_source_2, batch_1, batch_2, i, output_g)
 
-                common_feature_1    .append(_common_feature_1)
-                common_feature_2    .append(_common_feature_2)
-                private_feature_1   .append(_private_feature_1)
-                private_feature_2   .append(_private_feature_2)
+                rat_com             = torch.ones([self.batchsize, 1]).cuda()
+                rat_pri             = torch.ones([self.batchsize, 1]).cuda()
+                if self.config['sim_rat'] == True:
+                    sim_rat         = self.get_sim_rat(g1_pool, g2_pool)
+                    rat_com         = sim_rat
+                    rat_pri         = 1-sim_rat
+                    
+                common_feature_1    .append(rat_com*_common_feature_1)
+                common_feature_2    .append(rat_com*_common_feature_2)
+                private_feature_1   .append(rat_pri*_private_feature_1)
+                private_feature_2   .append(rat_pri*_private_feature_2)
 
         if self.emb_log:
             self.com1_list          = common_feature_1
@@ -395,7 +403,10 @@ class DiffDecouple(nn.Module):
         size = (batch[-1].item() + 1 if size is None else size)   # 一个batch中的图数
         pool = global_add_pool(feat, batch, size=size) if self.config['pooling']=='add' else global_mean_pool(feat, batch, size=size) 
         return pool
-        
+    
+    def get_sim_rat(self, pool_1, pool_2):
+        return F.cosine_similarity(pool_1, pool_2, dim=-1).unsqueeze(-1)
+    
     def compute_corr(self, x1, x2):
         # Subtract the mean
         x1_mean = torch.mean(x1, dim=-1, keepdim=True)
