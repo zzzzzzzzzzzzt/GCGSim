@@ -27,9 +27,8 @@ from collections import OrderedDict, defaultdict
 import os.path as osp
 TRUE_MODEL = 'astar'
 
-
 @torch.no_grad()
-def evaluate(testing_graphs, training_graphs, model, dataset: DatasetLocal, config):
+def evaluate(testing_graphs, training_graphs, model, dataset: DatasetLocal, config, emb_log=False):
     model.eval()
 
     scores                         = np.empty((len(testing_graphs), len(training_graphs)))
@@ -37,6 +36,12 @@ def evaluate(testing_graphs, training_graphs, model, dataset: DatasetLocal, conf
     ground_truth_ged               = np.empty((len(testing_graphs), len(training_graphs)))
     ground_truth_nged              = np.empty((len(testing_graphs), len(training_graphs)))
     prediction_mat                 = np.empty((len(testing_graphs), len(training_graphs)))
+    graph_embs_dicts               = dict()
+    for i_filter in range(model.num_filter):
+        graph_embs_dicts[i_filter] = dict()
+        for n in ['com_1', 'com_2', 'pri_1', 'pri_2']:
+             graph_embs_dicts[i_filter][n] \
+                                   = list()
 
     num_test_pairs                 = len(testing_graphs) * len(training_graphs)
     t                              = tqdm(total=num_test_pairs)
@@ -53,20 +58,32 @@ def evaluate(testing_graphs, training_graphs, model, dataset: DatasetLocal, conf
         target_nged                = data["norm_ged"]
         ground_truth_nged[i]       = target_nged
 
+        model.emb_log              = emb_log
         prediction, loss_cl        = model(data)
         prediction_mat[i]          = prediction.cpu().detach().numpy()
         scores[i]                  = ( F.mse_loss(prediction.cpu().detach(), target, reduction="none").numpy())
 
+        if emb_log:
+            for i_filter in range(model.num_filter):
+                graph_embs_dicts[i_filter]['com_1'] \
+                                   . append(model.com1_list[i_filter].cpu().detach().numpy())
+                graph_embs_dicts[i_filter]['com_2'] \
+                                   . append(model.com2_list[i_filter].cpu().detach().numpy())             
+                graph_embs_dicts[i_filter]['pri_1'] \
+                                   . append(model.pri1_list[i_filter].cpu().detach().numpy())                  
+                graph_embs_dicts[i_filter]['pri_2'] \
+                                   . append(model.pri2_list[i_filter].cpu().detach().numpy())                       
         t.update(len(training_graphs))
 
-    return scores, ground_truth, ground_truth_ged, ground_truth_nged, prediction_mat
+    return scores, ground_truth, ground_truth_ged, ground_truth_nged, prediction_mat, graph_embs_dicts
 
 def loss_sim_distribution(testing_graphs, training_graphs, model, dataset: DatasetLocal, config, args):
     scores,                        \
     ground_truth,                  \
     ground_truth_ged,              \
     ground_truth_nged,             \
-    prediction_mat                 = evaluate(dataset.testing_graphs, dataset.trainval_graphs, model, dataset, config)
+    prediction_mat,                \
+    graph_embs_dicts               = evaluate(dataset.testing_graphs, dataset.trainval_graphs, model, dataset, config)
 
     ged_max = int(np.max(ground_truth_ged))
     ged_min = int(np.min(ground_truth_ged))
@@ -111,6 +128,70 @@ def loss_sim_distribution(testing_graphs, training_graphs, model, dataset: Datas
     exp_figure_name = 'loss_distribution'
 
     save_fig(plt, osp.join('img', mode_dir, exp_figure_name), exp_figure_name)
+
+def compri_dist_heat(testing_graphs, training_graphs, model, dataset: DatasetLocal, config, args):
+    scores,                        \
+    ground_truth,                  \
+    ground_truth_ged,              \
+    ground_truth_nged,             \
+    prediction_mat,                \
+    graph_embs_dicts               = evaluate(dataset.testing_graphs, dataset.trainval_graphs, model, dataset, config, True)
+
+    len_trival                     = len(dataset.trainval_graphs)
+    sort_id_mat                    = np.argsort(ground_truth_ged,  kind = 'mergesort')
+    test_gidlist                   = [0, 1, 3, 15, 16]
+    filter_list                    = [3]
+    graph_embs_dist                = dict()
+    for i_filter in range(model.num_filter):
+        graph_embs_dist[i_filter]  = dict()
+        for name in ['com_1', 'com_2', 'pri_1', 'pri_2']:
+             graph_embs_dist[i_filter][name] \
+                                   = dict()
+
+    for i_filter in filter_list:
+        for test_id in test_gidlist:
+            com_dist_1             = list()
+            com_dist_2             = list()
+            pri_dist_1             = list()
+            pri_dist_2             = list()
+            for traval_id in sort_id_mat[test_id]:
+                com_dist_1         . append(np.linalg.norm(graph_embs_dicts[i_filter]['com_1'][test_id][traval_id]))
+                com_dist_2         . append(np.linalg.norm(graph_embs_dicts[i_filter]['com_2'][test_id][traval_id]))
+                pri_dist_1         . append(np.linalg.norm(graph_embs_dicts[i_filter]['pri_1'][test_id][traval_id]))
+                pri_dist_2         . append(np.linalg.norm(graph_embs_dicts[i_filter]['pri_2'][test_id][traval_id]))
+
+            graph_embs_dist[i_filter]['com_1'][test_id] \
+                                   = com_dist_1
+            graph_embs_dist[i_filter]['com_2'][test_id] \
+                                   = com_dist_2                                    
+            graph_embs_dist[i_filter]['pri_1'][test_id] \
+                                   = pri_dist_1 
+            graph_embs_dist[i_filter]['pri_2'][test_id] \
+                                   = pri_dist_2
+    
+    for i_filter in filter_list:
+        for test_id in test_gidlist:
+            fig, ([ax_c1, ax_c2], [ax_p1, ax_p2]) \
+                                   = plt.subplots(2, 2, figsize=(14.4, 9.6))
+
+            ax_c1.fill_between(list(range(len_trival)), \
+                               min(graph_embs_dist[i_filter]['com_1'][test_id]), \
+                               graph_embs_dist[i_filter]['com_1'][test_id], \
+                               alpha=0.7)
+            ax_c2.fill_between(list(range(len_trival)), \
+                               min(graph_embs_dist[i_filter]['com_2'][test_id]), \
+                               graph_embs_dist[i_filter]['com_2'][test_id], \
+                               alpha=0.7)
+            ax_p1.fill_between(list(range(len_trival)), \
+                               min(graph_embs_dist[i_filter]['pri_1'][test_id]), \
+                               graph_embs_dist[i_filter]['pri_1'][test_id], \
+                               alpha=0.7)
+            ax_p2.fill_between(list(range(len_trival)), \
+                               min(graph_embs_dist[i_filter]['pri_2'][test_id]), \
+                               graph_embs_dist[i_filter]['pri_2'][test_id], \
+                               alpha=0.7)
+            plt.savefig('c.png', bbox_inches='tight')
+    pass
 
 def get_true_result(all_graphs, testing_graphs, trainval_graphs, sim_or_dist = 'dist'):
     ged_matrix                                  = trainval_graphs.ged
@@ -678,8 +759,12 @@ if __name__ == "__main__":
     parser.add_argument('--gpu_id',            type = int  ,            default = 0)
     parser.add_argument('--model',             type = str,              default = 'GSC_GNN')  # GCN, GAT or other
     parser.add_argument('--recache',         action = "store_true",        help = "clean up the old adj data", default=True)
-    parser.add_argument('--pretrain_path',     type = str,              default = 'model_saved/AIDS700nef/2022-03-17_10-42-12')
+    parser.add_argument('--pretrain_path',     type = str,              default = 'model_saved/AIDS700nef/2024-02-28_16-06-56')
     args = parser.parse_args()
+    # import os
+    # os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
+    # os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+    # torch.cuda.set_device("cuda:0")
 
     config_path                 = osp.join(args.pretrain_path, 'config' + '.yml')
     config                      = get_config(config_path)
@@ -689,9 +774,9 @@ if __name__ == "__main__":
 
     dataset                     = load_data(args, False)
     dataset                     . load(config)
-    model                       = GSC(config, dataset.input_dim).cuda()
+    model                       = DiffDecouple(config, dataset.input_dim).cuda()
     model                       . eval()
 
-    loss_sim_distribution(dataset.testing_graphs, dataset.trainval_graphs, model, dataset, config, args)
+    compri_dist_heat(dataset.testing_graphs, dataset.trainval_graphs, model, dataset, config, args)
     # visualize_embeddings_gradual(args, dataset.testing_graphs, dataset.trainval_graphs, model)
 

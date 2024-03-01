@@ -127,7 +127,9 @@ class Node2GraphAttention(torch.nn.Module):
         weighted = coefs.unsqueeze(-1) * n_embedding
 
         return scatter_add(weighted, n_batch, dim=0, dim_size=size)
-
+    
+    def get_coefs(self, n_embedding, g_embedding):
+        return torch.sigmoid((n_embedding * g_embedding).sum(dim=1))
 
 class AttentionModule(torch.nn.Module):
     def __init__(self, config, dim_size):

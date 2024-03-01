@@ -20,6 +20,7 @@ class DiffDecouple(nn.Module):
         self.batchsize              = self.config['batch_size']
         self.n_feat                 = n_feat
         self.pearsoncorrcoef        = PearsonCorrCoef(self.config['batch_size'])
+        self.emb_log                = False
         self.setup_layers()
     
     def setup_layers(self):
@@ -196,6 +197,12 @@ class DiffDecouple(nn.Module):
                 private_feature_1   .append(_private_feature_1)
                 private_feature_2   .append(_private_feature_2)
 
+        if self.emb_log:
+            self.com1_list          = common_feature_1
+            self.com2_list          = common_feature_2
+            self.pri1_list          = private_feature_1
+            self.pri2_list          = private_feature_2
+            
         # computer score and loss
         ntn_score                   = self.compute_ntn_score(common_feature_1, common_feature_2, private_feature_1, private_feature_2)
         decouple_loss               = self.compute_decouple_loss(common_feature_1, common_feature_2, private_feature_1, private_feature_2)
@@ -211,6 +218,43 @@ class DiffDecouple(nn.Module):
                                         ) 
 
         return ntn_score, decouple_loss + rec_loss
+
+    def collect_embeddings(self, all_graphs):
+        node_embs_dict = dict()  
+        for g in all_graphs:
+            feat = g.x.cuda()
+            edge_index = g.edge_index.cuda()
+            for i, gnn in enumerate(self.gnn_list):
+                # add gnn_list as key
+                if i not in node_embs_dict.keys():
+                    node_embs_dict[i] = dict()
+
+                feat = gnn(feat, edge_index)
+                if self.config.get('convolpass', True):
+                    feat = F.relu(feat)
+
+                node_embs_dict[i][int(g['i'])] = feat
+        return node_embs_dict
+    
+    def collect_comandpri_embeddings(self, g_1, g_2, node_embs_dict, graph_embs_dicts):
+        com_pri = list()
+        for i in node_embs_dict.keys():
+            n_1_i = node_embs_dict[i][int(g_1['i'])]
+            n_2_i = node_embs_dict[i][int(g_2['i'])]
+
+            com_1_i, \
+            com_2_i, \
+            pri_1_i, \
+            pri_2_i, \
+            _, _, _, _ = self.deepset_output_for1(n_1_i, n_2_i, i)
+
+            com_pri.append({'com_1_i': com_1_i, 
+                            'com_2_i': com_2_i, 
+                            'pri_1_i': pri_1_i,
+                            'pri_2_i': pri_2_i})
+            
+        graph_embs_dicts[int(g_1['i'])][int(g_2['i'])] = com_pri
+        return graph_embs_dicts
     
     def compute_decouple_loss(self, common_feature_1,
                             common_feature_2, 
@@ -320,6 +364,33 @@ class DiffDecouple(nn.Module):
             out_1, out_2 = pool_1, pool_2
         return common_feature_1, common_feature_2, private_feature_1, private_feature_2, out_1, out_2
     
+    def deepset_output_for1(self, x1, x2, filter_idx, out=False):
+        deepsets_inner_1 = self.act_inner(self.deepset_inner[filter_idx](x1))
+        deepsets_inner_2 = self.act_inner(self.deepset_inner[filter_idx](x2))
+
+        pool_1 = torch.sum(deepsets_inner_1, dim=0)
+        pool_2 = torch.sum(deepsets_inner_2, dim=0)
+
+        coefs_12_i = self.n2gatt.get_coefs(deepsets_inner_1, pool_2)
+        coefs_21_i = self.n2gatt.get_coefs(deepsets_inner_2, pool_1)
+
+        att_1with_2 = torch.sum(coefs_12_i.unsqueeze(-1)*deepsets_inner_1, dim=0)
+        att_2with_1 = torch.sum(coefs_21_i.unsqueeze(-1)*deepsets_inner_2, dim=0)
+
+        g1_embedding_att = torch.cat((pool_1, att_1with_2), dim=-1)
+        g2_embedding_att = torch.cat((pool_2, att_2with_1), dim=-1)
+
+        common_feature_1 = self.act_outer(self.c_deepset_outer[filter_idx](g1_embedding_att))
+        common_feature_2 = self.act_outer(self.c_deepset_outer[filter_idx](g2_embedding_att))
+
+        private_feature_1 = self.act_outer(self.p_deepset_outer[filter_idx](g1_embedding_att))
+        private_feature_2 = self.act_outer(self.p_deepset_outer[filter_idx](g2_embedding_att))
+
+        out_1, out_2 = None, None
+        if out:
+            out_1, out_2 = pool_1, pool_2
+        return common_feature_1, common_feature_2, private_feature_1, private_feature_2, out_1, out_2, coefs_12_i, coefs_21_i
+
     def _pool(self, feat, batch, size = None):
         size = (batch[-1].item() + 1 if size is None else size)   # 一个batch中的图数
         pool = global_add_pool(feat, batch, size=size) if self.config['pooling']=='add' else global_mean_pool(feat, batch, size=size) 
