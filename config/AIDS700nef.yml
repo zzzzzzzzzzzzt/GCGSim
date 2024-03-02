@@ -55,7 +55,7 @@ GSC_GNN:
   model_name: 'GSC_GNN'
   dataset_name: 'AIDS700nef'
   sep: False
-  board_log: False
+  board_log: True
   reconstruction: False
   sim_rat: True
 

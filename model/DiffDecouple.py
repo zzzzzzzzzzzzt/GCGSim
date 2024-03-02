@@ -193,8 +193,8 @@ class DiffDecouple(nn.Module):
                 g1_pool,            \
                 g2_pool             = self.deepset_output(conv_source_1, conv_source_2, batch_1, batch_2, i, output_g)
 
-                rat_com             = torch.ones([self.batchsize, 1]).cuda()
-                rat_pri             = torch.ones([self.batchsize, 1]).cuda()
+                rat_com             = torch.ones([_common_feature_1.size()[0], 1]).cuda()
+                rat_pri             = torch.ones([_common_feature_1.size()[0], 1]).cuda()
                 if self.config['sim_rat'] == True:
                     sim_rat         = self.get_sim_rat(g1_pool, g2_pool)
                     rat_com         = sim_rat
@@ -213,7 +213,7 @@ class DiffDecouple(nn.Module):
             
         # computer score and loss
         ntn_score                   = self.compute_ntn_score(common_feature_1, common_feature_2, private_feature_1, private_feature_2)
-        decouple_loss               = self.compute_decouple_loss(common_feature_1, common_feature_2, private_feature_1, private_feature_2)
+        dis_loss, cor_loss          = self.compute_decouple_loss(common_feature_1, common_feature_2, private_feature_1, private_feature_2)
         rec_loss                    = (
                                         self.reconstruction_loss(common_feature_1[-1],
                                                                  common_feature_2[-1],
@@ -223,9 +223,12 @@ class DiffDecouple(nn.Module):
                                                                  g2_pool)
                                         if self.config['reconstruction'] == True
                                         else 0
-                                        ) 
+                                        )
+        # log loss 
+        self.dis_loss_log = dis_loss
+        self.cor_loss_log = cor_loss
 
-        return ntn_score, decouple_loss + rec_loss
+        return ntn_score, dis_loss + cor_loss + rec_loss
 
     def collect_embeddings(self, all_graphs):
         node_embs_dict = dict()  
@@ -309,7 +312,7 @@ class DiffDecouple(nn.Module):
                                         else torch.cat((sim_pri, f(F.cosine_similarity(common_feature_2[i], private_feature_2[i], dim=-1))), dim=0)
                                         )
         
-        return -torch.log(sim_com/(sim_com + sim_pri)).mean() + cor_loss_1.mean() + cor_loss_2.mean()
+        return -torch.log(sim_com/(sim_com + sim_pri)).mean(), cor_loss_1.mean() + cor_loss_2.mean()
 
     def compute_ntn_score(self, common_feature_1, 
                         common_feature_2,

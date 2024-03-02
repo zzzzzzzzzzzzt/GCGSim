@@ -62,8 +62,10 @@ def main(args, config, logger: Logger, run_id: int, dataset: DatasetLocal):
             main_index               = main_index + batch_pair[0].num_graphs               
             loss_sum                 = loss_sum + loss                                    
             if config['board_log']:
-                writer               .add_scalar('loss', loss, log_i)
-                model                .log_param(writer, log_i)
+                writer               .add_scalar('loss/total', loss, log_i)
+                writer               .add_scalar('loss/dis_loss', model.dis_loss_log, log_i)
+                writer               .add_scalar('loss/cor_loss', model.cor_loss_log, log_i)
+                # model                .log_param(writer, log_i)
                 log_i                = log_i + 1
         loss                         = loss_sum / main_index                              
         loss_list.append(loss)
