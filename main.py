@@ -65,6 +65,8 @@ def main(args, config, logger: Logger, run_id: int, dataset: DatasetLocal):
                 writer               .add_scalar('loss/total', loss, log_i)
                 writer               .add_scalar('loss/dis_loss', model.dis_loss_log, log_i)
                 writer               .add_scalar('loss/cor_loss', model.cor_loss_log, log_i)
+                writer               .add_scalar('sim/com', model.sim_com_log, log_i)
+                writer               .add_scalar('sim/pri', model.sim_pri_log, log_i)
                 # model                .log_param(writer, log_i)
                 log_i                = log_i + 1
         loss                         = loss_sum / main_index                              
