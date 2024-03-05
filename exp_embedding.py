@@ -129,7 +129,7 @@ def loss_sim_distribution(testing_graphs, training_graphs, model, dataset: Datas
 
     save_fig(plt, osp.join('img', mode_dir, exp_figure_name), exp_figure_name)
 
-def compri_dist_heat(testing_graphs, training_graphs, model, dataset: DatasetLocal, config, args):
+def compri_dist_l2(testing_graphs, training_graphs, model, dataset: DatasetLocal, config, args):
     scores,                        \
     ground_truth,                  \
     ground_truth_ged,              \
@@ -139,8 +139,8 @@ def compri_dist_heat(testing_graphs, training_graphs, model, dataset: DatasetLoc
 
     len_trival                     = len(dataset.trainval_graphs)
     sort_id_mat                    = np.argsort(ground_truth_ged,  kind = 'mergesort')
-    test_gidlist                   = [0, 1, 3, 15, 16]
-    filter_list                    = [3]
+    test_gidlist                   = [10, 20, 30, 40, 50, 60]
+    filter_list                    = [0,1,2,3]
     graph_embs_dist                = dict()
     for i_filter in range(model.num_filter):
         graph_embs_dist[i_filter]  = dict()
@@ -190,8 +190,72 @@ def compri_dist_heat(testing_graphs, training_graphs, model, dataset: DatasetLoc
                                min(graph_embs_dist[i_filter]['pri_2'][test_id]), \
                                graph_embs_dist[i_filter]['pri_2'][test_id], \
                                alpha=0.7)
-            plt.savefig('c.png', bbox_inches='tight')
-    pass
+            for ax_i, name in zip([ax_c1, ax_c2, ax_p1, ax_p2], ['com_1', 'com_2', 'pri_1', 'pri_2']):
+                ax_i.set_ylabel('emb_dist_l2')
+                ax_i.set_title(name)
+            fig.suptitle('test_{}\' com and pri dist_l2 to all traval'.format(test_id), fontsize=20)
+
+            _, mode_dir = osp.split(args.pretrain_path)
+            exp_figure_name = 'compri_dist_l2'
+            dir_ = osp.join('img', mode_dir, exp_figure_name, 'filter_{}'.format(i_filter))
+            img_name = 'test_{}_compri_dist_l2'.format(test_id)
+
+            save_fig(plt, dir_, img_name)
+            plt.close()
+
+def compri_sim(testing_graphs, training_graphs, model, dataset: DatasetLocal, config, args, func='sim'):
+    scores,                        \
+    ground_truth,                  \
+    ground_truth_ged,              \
+    ground_truth_nged,             \
+    prediction_mat,                \
+    graph_embs_dicts               = evaluate(dataset.testing_graphs, dataset.trainval_graphs, model, dataset, config, True)
+
+    if func =='sim':
+        func = cos_sim
+    len_trival                     = len(dataset.trainval_graphs)
+    sort_id_mat                    = np.argsort(ground_truth_ged,  kind = 'mergesort')
+    test_gidlist                   = [0, 1, 3, 15, 16]
+    filter_list                    = [0]
+    graph_embs_dist                = dict()
+    for i_filter in range(model.num_filter):
+        graph_embs_dist[i_filter]  = dict()
+        for name in ['com_sim', 'pri_sim']:
+             graph_embs_dist[i_filter][name] \
+                                   = dict()
+    for i_filter in filter_list:
+        for test_id in test_gidlist:
+            com_sim                = list()
+            pri_sim                = list()
+            for traval_id in sort_id_mat[test_id]:
+                com_sim            . append(F.cosine_similarity(torch.Tensor(graph_embs_dicts[i_filter]['com_1'][test_id][traval_id]),
+                                                                torch.Tensor(graph_embs_dicts[i_filter]['com_2'][test_id][traval_id]), dim=-1))
+                pri_sim            . append(F.cosine_similarity(torch.Tensor(graph_embs_dicts[i_filter]['pri_1'][test_id][traval_id]),
+                                                                torch.Tensor(graph_embs_dicts[i_filter]['pri_2'][test_id][traval_id]), dim=-1))
+                
+            graph_embs_dist[i_filter]['com_sim'][test_id] \
+                                   = com_sim
+            graph_embs_dist[i_filter]['pri_sim'][test_id] \
+                                   = pri_sim
+    for i_filter in filter_list:
+        for test_id in test_gidlist:
+            fig, ax                = plt.subplots(figsize=(7.2, 4.8))
+            # ax.plot(list(range(len_trival)),
+            #         graph_embs_dist[i_filter]['com_sim'][test_id], 
+            #         "k--",
+            #         label="com_sim")
+            ax.plot(list(range(len_trival)),
+                    graph_embs_dist[i_filter]['pri_sim'][test_id], 
+                    "k:",
+                    label="pri_sim")
+            ax.legend()
+            plt.savefig('c.png')
+            plt.close()
+def cos_sim(a, b):
+    a_norm = np.linalg.norm(a)
+    b_norm = np.linalg.norm(b)
+    cos = np.dot(a,b)/(a_norm * b_norm)
+    return cos if not np.isnan(cos) else 0
 
 def get_true_result(all_graphs, testing_graphs, trainval_graphs, sim_or_dist = 'dist'):
     ged_matrix                                  = trainval_graphs.ged
@@ -759,7 +823,7 @@ if __name__ == "__main__":
     parser.add_argument('--gpu_id',            type = int  ,            default = 0)
     parser.add_argument('--model',             type = str,              default = 'GSC_GNN')  # GCN, GAT or other
     parser.add_argument('--recache',         action = "store_true",        help = "clean up the old adj data", default=True)
-    parser.add_argument('--pretrain_path',     type = str,              default = 'model_saved/AIDS700nef/2024-02-28_16-06-56')
+    parser.add_argument('--pretrain_path',     type = str,              default = 'model_saved/AIDS700nef/2024-03-03_01-26-19')
     args = parser.parse_args()
     # import os
     # os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
@@ -777,6 +841,6 @@ if __name__ == "__main__":
     model                       = DiffDecouple(config, dataset.input_dim).cuda()
     model                       . eval()
 
-    compri_dist_heat(dataset.testing_graphs, dataset.trainval_graphs, model, dataset, config, args)
+    compri_sim(dataset.testing_graphs, dataset.trainval_graphs, model, dataset, config, args)
     # visualize_embeddings_gradual(args, dataset.testing_graphs, dataset.trainval_graphs, model)
 
