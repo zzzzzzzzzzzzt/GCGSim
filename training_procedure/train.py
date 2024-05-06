@@ -8,18 +8,27 @@ def train(self, graph_batch, model, loss_func, optimizer, target, dataset = None
 
     
     config                        = self.config   
-    use_ssl                       = config.get('use_ssl', False)  
+    use_ssl                       = config.get('use_ssl', False) 
+    use_pre                       = config.get('use_pre', False)
     optimizer.zero_grad()
 
     if config['model_name'] in ['GSC_GNN']: 
         # if not config['use_sim']:
-        prediction, loss_cl       = model(graph_batch)
+        prediction, reg_dict      = model(graph_batch)
 
         # from torchviz import make_dot
         # graph_forward = make_dot(model(graph_batch))
         # graph_forward.render(filename='graph/DiffDecouple163', view=False, format='pdf')
 
-        loss                      = loss_func(prediction, target) if not use_ssl else loss_func(prediction, target)+loss_cl
+        loss                      = loss_func(prediction, target['target']) 
+        if use_ssl:
+            loss += reg_dict['reg_loss']
+        if use_pre:
+            com_lable = torch.abs(torch.normal(mean=0.0, std=0.1, size=(reg_dict['ged_com'].shape[0],))).cuda()
+            loss += loss_func(reg_dict['ged_com'], com_lable)
+            pri_lable = target['target_scaler']
+            loss += loss_func(reg_dict['ged_pri'], pri_lable)
+            
         loss.backward()
         if self.config.get('clip_grad', False):
             nn.utils.clip_grad_norm_(model.parameters(), 1)

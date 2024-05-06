@@ -57,7 +57,7 @@ def main(args, config, logger: Logger, run_id: int, dataset: DatasetLocal):
         total_loss_sum               = 0 
         for batch_pair in batches:
             data                     = dataset.transform_batch(batch_pair, config)
-            target                   = data["target"].cuda()
+            target                   = {'target': data["target"].cuda(), 'target_scaler': data["target_scaler"].cuda()}
             model, loss              = T.train(data, model, loss_func, optimizer, target)   
             main_index               = main_index + batch_pair[0].num_graphs               
             loss_sum                 = loss_sum + loss                                    
@@ -66,7 +66,8 @@ def main(args, config, logger: Logger, run_id: int, dataset: DatasetLocal):
                 writer               .add_scalar('loss/dis_loss', model.dis_loss_log, log_i)
                 writer               .add_scalar('loss/cor_loss', model.cor_loss_log, log_i)
                 writer               .add_scalar('sim/com', model.sim_com_log, log_i)
-                writer               .add_scalar('sim/pri', model.sim_pri_log, log_i)
+                writer               .add_scalar('sim/sim_pri1', model.sim_pri1_log, log_i)
+                writer               .add_scalar('sim/sim_pri2', model.sim_pri2_log, log_i)
                 # model                .log_param(writer, log_i)
                 log_i                = log_i + 1
         loss                         = loss_sum / main_index                              

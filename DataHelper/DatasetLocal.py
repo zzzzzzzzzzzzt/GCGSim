@@ -68,6 +68,8 @@ class DatasetLocal(dataset):
         self.num_train_graphs        = len(self.training_graphs)
         self.num_val_graphs          = len(self.val_graphs)
         self.num_test_graphs         = len(self.testing_graphs)
+        self.ged_max                 = torch.max(self.trainval_ged_matrix[self.trainval_ged_matrix != float('inf')])
+        self.ged_min                 = torch.min(self.trainval_ged_matrix)
 
 
         # if config['use_val']:
@@ -187,6 +189,10 @@ class DatasetLocal(dataset):
 
         new_data["target_ged"] = (
             torch.from_numpy(np.array([(el) for el in ged])).view(-1).float()   
+        )
+
+        new_data["target_scaler"] = (
+            torch.from_numpy(np.array([(el - self.ged_min) / (self.ged_max - self.ged_min) for el in ged])).view(-1).float()   
         )
         return new_data
 

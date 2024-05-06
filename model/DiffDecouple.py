@@ -36,6 +36,7 @@ class DiffDecouple(nn.Module):
             self.filters            = filters
         self.gnn_list               = nn.ModuleList()  
         self.NTN_list               = nn.ModuleList()
+        self.NTN_ged_list           = nn.ModuleList()
         if self.config['graph_encoder'] == 'GCA':
             self.com_list           = nn.ModuleList()  
             self.pri_list           = nn.ModuleList()
@@ -83,10 +84,14 @@ class DiffDecouple(nn.Module):
         elif self.config['NTN_layers'] == self.num_filter:
             for i in range(self.num_filter):
                 self.NTN_list.append(TensorNetworkModule(self.config, 2*self.filters[i]))
+                self.NTN_ged_list.append(TensorNetworkModule(self.config, self.filters[i]))
         else:
             raise NotImplementedError("Error NTN_layer number.")
          
         self.score_sim_layer        = nn.Sequential(nn.Linear(self.config['tensor_neurons']*self.config['NTN_layers'], self.config['tensor_neurons']),
+                                                    nn.ReLU(),
+                                                    nn.Linear(self.config['tensor_neurons'] , 1))
+        self.ged_sim_layer          = nn.Sequential(nn.Linear(self.config['tensor_neurons']*self.config['NTN_layers'], self.config['tensor_neurons']),
                                                     nn.ReLU(),
                                                     nn.Linear(self.config['tensor_neurons'] , 1))
         if  self.config['reconstruction'] == True:
@@ -213,6 +218,7 @@ class DiffDecouple(nn.Module):
             
         # computer score and loss
         ntn_score                   = self.compute_ntn_score(common_feature_1, common_feature_2, private_feature_1, private_feature_2)
+        ged_com, ged_pri            = self.compute_ged_score(common_feature_1, common_feature_2, private_feature_1, private_feature_2)
         dis_loss, cor_loss          = self.compute_decouple_loss(common_feature_1, common_feature_2, private_feature_1, private_feature_2)
         rec_loss                    = (
                                         self.reconstruction_loss(common_feature_1[-1],
@@ -228,7 +234,11 @@ class DiffDecouple(nn.Module):
         self.dis_loss_log = dis_loss
         self.cor_loss_log = cor_loss
 
-        return ntn_score, dis_loss + cor_loss + rec_loss
+        reg_dict = {'ged_com': ged_com, 
+                    'ged_pri': ged_pri, 
+                    'reg_loss': dis_loss + cor_loss + rec_loss}
+        
+        return ntn_score, reg_dict
 
     def collect_embeddings(self, all_graphs):
         node_embs_dict = dict()  
@@ -342,7 +352,16 @@ class DiffDecouple(nn.Module):
                                         )
             
         return torch.sigmoid(self.score_sim_layer(ntn_score).squeeze())
+    
+    def compute_ged_score(self, common_feature_1, common_feature_2, private_feature_1, private_feature_2):
+        ged_c = torch.cat([self.NTN_ged_list[i](common_feature_1[i], common_feature_2[i]) for i in range(self.config['NTN_layers'])], dim=-1)
+        ged_p = torch.cat([self.NTN_ged_list[i](private_feature_1[i], private_feature_2[i]) for i in range(self.config['NTN_layers'])], dim=-1)
+        
+        ged_com = torch.sigmoid(self.ged_sim_layer(ged_c).squeeze())
+        ged_pri = torch.sigmoid(self.ged_sim_layer(ged_p).squeeze())
 
+        return ged_com, ged_pri
+    
     def reconstruction_loss(self, com_1, com_2, pri_1, pri_2, g_1, g_2):
         loss_fun = nn.MSELoss(reduction='sum')
         loss_1 = self._rec_loss(com_1, pri_1, g_1, loss_fun)
