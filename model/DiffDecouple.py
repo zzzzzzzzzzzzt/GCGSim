@@ -331,7 +331,7 @@ class DiffDecouple(nn.Module):
         self.sim_com_log            = sim_com.mean()
         self.sim_pri1_log           = sim_pri1.mean()
         self.sim_pri2_log           = sim_pri2.mean()
-        return -torch.log(sim_com/(sim_com + sim_pri1 + sim_pri2)).mean(), cor_loss_1.mean() + cor_loss_2.mean()
+        return -sim_com.mean(), 0
 
     def compute_ntn_score(self, common_feature_1, 
                         common_feature_2,
