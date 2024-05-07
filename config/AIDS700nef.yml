@@ -58,7 +58,7 @@ GSC_GNN:
   sep: False
   board_log: True
   reconstruction: False
-  sim_rat: True
+  sim_rat: False
 
 SimGNN:
   patience: -1

@@ -22,13 +22,14 @@ from utils.color import *
 # matplotlib.rcParams['pdf.fonttype'] = 42
 # matplotlib.rcParams['ps.fonttype'] = 42
 # color_map = {0: "red", 1: "blue", 2: "green", 3: "orange", 4: "yellow", 5: "pink", 6: "gray"}
+matplotlib.rcParams['lines.linewidth'] = 0.6
 import matplotlib.pyplot as plt
 from collections import OrderedDict, defaultdict
 import os.path as osp
 TRUE_MODEL = 'astar'
 
 @torch.no_grad()
-def evaluate(testing_graphs, training_graphs, model, dataset: DatasetLocal, config, emb_log=False):
+def evaluate(testing_graphs, training_graphs, model, dataset: DatasetLocal, config, emb_log=True):
     model.eval()
 
     scores                         = np.empty((len(testing_graphs), len(training_graphs)))
@@ -37,11 +38,11 @@ def evaluate(testing_graphs, training_graphs, model, dataset: DatasetLocal, conf
     ground_truth_nged              = np.empty((len(testing_graphs), len(training_graphs)))
     prediction_mat                 = np.empty((len(testing_graphs), len(training_graphs)))
     graph_embs_dicts               = dict()
+    graph_cdistri_dicts            = list()
     for i_filter in range(model.num_filter):
         graph_embs_dicts[i_filter] = dict()
         for n in ['com_1', 'com_2', 'pri_1', 'pri_2']:
-             graph_embs_dicts[i_filter][n] \
-                                   = list()
+             graph_embs_dicts[i_filter][n] = list()
 
     num_test_pairs                 = len(testing_graphs) * len(training_graphs)
     t                              = tqdm(total=num_test_pairs)
@@ -63,28 +64,23 @@ def evaluate(testing_graphs, training_graphs, model, dataset: DatasetLocal, conf
         prediction_mat[i]          = prediction.cpu().detach().numpy()
         scores[i]                  = ( F.mse_loss(prediction.cpu().detach(), target, reduction="none").numpy())
 
+        # if type(model.c_distri_list) is list:
+        #     c_distri_list = [model.c_distri_list[i].cpu().detach().numpy() for i in range(model.num_filter)]
+        # else:
+        #     c_distri_list = model.c_distri_list.cpu().detach().numpy()
+        # graph_cdistri_dicts.append(c_distri_list)
+
         if emb_log:
             for i_filter in range(model.num_filter):
-                graph_embs_dicts[i_filter]['com_1'] \
-                                   . append(model.com1_list[i_filter].cpu().detach().numpy())
-                graph_embs_dicts[i_filter]['com_2'] \
-                                   . append(model.com2_list[i_filter].cpu().detach().numpy())             
-                graph_embs_dicts[i_filter]['pri_1'] \
-                                   . append(model.pri1_list[i_filter].cpu().detach().numpy())                  
-                graph_embs_dicts[i_filter]['pri_2'] \
-                                   . append(model.pri2_list[i_filter].cpu().detach().numpy())                       
+                graph_embs_dicts[i_filter]['com_1'].append(model.com1_list[i_filter].cpu().detach().numpy())
+                graph_embs_dicts[i_filter]['com_2'].append(model.com2_list[i_filter].cpu().detach().numpy())             
+                graph_embs_dicts[i_filter]['pri_1'].append(model.pri1_list[i_filter].cpu().detach().numpy())                  
+                graph_embs_dicts[i_filter]['pri_2'].append(model.pri2_list[i_filter].cpu().detach().numpy())
         t.update(len(training_graphs))
 
-    return scores, ground_truth, ground_truth_ged, ground_truth_nged, prediction_mat, graph_embs_dicts
+    return scores, ground_truth, ground_truth_ged, ground_truth_nged, prediction_mat, graph_embs_dicts, graph_cdistri_dicts
 
-def loss_sim_distribution(testing_graphs, training_graphs, model, dataset: DatasetLocal, config, args):
-    scores,                        \
-    ground_truth,                  \
-    ground_truth_ged,              \
-    ground_truth_nged,             \
-    prediction_mat,                \
-    graph_embs_dicts               = evaluate(dataset.testing_graphs, dataset.trainval_graphs, model, dataset, config)
-
+def loss_sim_distribution(scores, ground_truth_ged, ground_truth):
     ged_max = int(np.max(ground_truth_ged))
     ged_min = int(np.min(ground_truth_ged))
     ged = []
@@ -96,15 +92,15 @@ def loss_sim_distribution(testing_graphs, training_graphs, model, dataset: Datas
         ged.append('{}/{}'.format(i, find_num))
         loss.append(find_average)
 
-    nged_max = int(np.max(ground_truth_nged))
-    nged_min = int(np.min(ground_truth_nged))
+    nged_max = 1
+    nged_min = 0
     nged = []
     nloss = []
     nstep = 20
     step = (nged_max - nged_min)/nstep
 
     for i in range(nstep):
-        find = np.where((ground_truth_nged>=i*step) & (ground_truth_nged<(i+1)*step), scores, 0.0)
+        find = np.where((ground_truth>=i*step) & (ground_truth<(i+1)*step), scores, 0.0)
         find_num = len(np.nonzero(find)[0])
         find_average = find.sum()/find_num
         nged.append('{:.1f}-{:.1f}/{}'.format(i*step, (i+1)*step, find_num))
@@ -116,27 +112,21 @@ def loss_sim_distribution(testing_graphs, training_graphs, model, dataset: Datas
     ax_ged.tick_params(axis='x', labelrotation=90)
     ax_ged.set_ylabel('loss average')
     ax_ged.set_xlabel('ged/num')
-    ax_ged.set_title('{}: Loss related to the distribution of GED'.format(model.__class__.__name__))
+    ax_ged.set_title('{:.5f} Loss related to the distribution of GED'.format(scores.mean()))
 
     ax_nged.bar(nged, nloss, width=0.5)
     ax_nged.tick_params(axis='x', labelrotation=90)
     ax_nged.set_ylabel('loss average')
     ax_nged.set_xlabel('nged/num')
-    ax_nged.set_title('{}: Loss related to the distribution of nGED'.format(model.__class__.__name__))
-
+    ax_nged.set_title('{:.5f} Loss related to the distribution of truth'.format(scores.mean()))
+    ax_nged.set_ylim(0, 0.014)
+    
     _, mode_dir = osp.split(args.pretrain_path)
     exp_figure_name = 'loss_distribution'
 
     save_fig(plt, osp.join('img', mode_dir, exp_figure_name), exp_figure_name)
 
-def compri_dist_l2(testing_graphs, training_graphs, model, dataset: DatasetLocal, config, args):
-    scores,                        \
-    ground_truth,                  \
-    ground_truth_ged,              \
-    ground_truth_nged,             \
-    prediction_mat,                \
-    graph_embs_dicts               = evaluate(dataset.testing_graphs, dataset.trainval_graphs, model, dataset, config, True)
-
+def compri_dist_l2(ground_truth_ged, graph_embs_dicts, dataset):
     len_trival                     = len(dataset.trainval_graphs)
     sort_id_mat                    = np.argsort(ground_truth_ged,  kind = 'mergesort')
     test_gidlist                   = [10, 20, 30, 40, 50, 60]
@@ -202,60 +192,243 @@ def compri_dist_l2(testing_graphs, training_graphs, model, dataset: DatasetLocal
 
             save_fig(plt, dir_, img_name)
             plt.close()
+def emb_hist(ground_truth_ged, graph_embs_dicts):
+    nbins                          = 30
+    sort_id_mat                    = np.argsort(ground_truth_ged,  kind = 'mergesort')
+    gidraw                         = [30, 60, 90]
+    rankcol                        = [0, 100, 200, 300,]  
+    filter_list                    = [0,1,2,3]
 
-def compri_sim(testing_graphs, training_graphs, model, dataset: DatasetLocal, config, args, func='sim'):
-    scores,                        \
-    ground_truth,                  \
-    ground_truth_ged,              \
-    ground_truth_nged,             \
-    prediction_mat,                \
-    graph_embs_dicts               = evaluate(dataset.testing_graphs, dataset.trainval_graphs, model, dataset, config, True)
+    for i_filter in filter_list:
+        for test_id in gidraw:
+            for traval_id in sort_id_mat[test_id][rankcol]:
+                fig, ([ax_c1, ax_c2], [ax_p1, ax_p2]) = plt.subplots(2, 2, figsize=(14.4, 9.6), tight_layout=True)
+                ax_c1.hist(graph_embs_dicts[i_filter]['com_1'][test_id][traval_id], bins=nbins)
+                ax_c2.hist(graph_embs_dicts[i_filter]['com_2'][test_id][traval_id], bins=nbins)
+                ax_p1.hist(graph_embs_dicts[i_filter]['pri_1'][test_id][traval_id], bins=nbins)
+                ax_p2.hist(graph_embs_dicts[i_filter]['pri_2'][test_id][traval_id], bins=nbins)
+                
+                fig.suptitle('{}_{}_{}\' com and pri emb hist'.format(test_id, traval_id, i_filter), fontsize=20)
+                _, mode_dir = osp.split(args.pretrain_path)
+                exp_figure_name = 'emb_hist'
+                img_name = '{}_{}_{}'.format(test_id, traval_id, i_filter)
+                save_fig(plt, osp.join('img', mode_dir, exp_figure_name), img_name)
+                plt.close()
 
-    if func =='sim':
-        func = cos_sim
+def compri_distri_distribution(scores, ground_truth, graph_cdistri_dicts):
+    truth_max = 1
+    truth_min = 0
+    x_truth = []
+    nstep = 20
+    step = (truth_max - truth_min)/nstep
+    graph_cdistri_dict = dict()
+    graph_cdistri_var_dict = dict()
+    for i_filter in range(model.num_filter):
+        graph_cdistri_dict[i_filter] = list()
+        graph_cdistri_var_dict[i_filter] = list()
+
+    if type(graph_cdistri_dicts[0]) is list:
+        filter_list = [0,1,2,3]
+    else:
+        filter_list = [0]
+
+    for i_filter in filter_list:
+        c_distri = list()
+        for i in range(nstep):
+            index = np.where((ground_truth>=i*step) & (ground_truth<(i+1)*step))
+            for index_x, index_y in zip(index[0], index[1]):
+                if type(graph_cdistri_dicts[0]) is list:
+                    c_distri.append(graph_cdistri_dicts[index_x][i_filter][index_y])
+                else:
+                    c_distri.append(graph_cdistri_dicts[index_x][index_y])
+            if i_filter == 0:
+                x_truth.append('{:.2f}-{:.2f}/{}'.format(i*step, (i+1)*step, len(c_distri)))
+            graph_cdistri_dict[i_filter].append(np.mean(c_distri))
+            graph_cdistri_var_dict[i_filter].append(np.var(c_distri))
+    
+    colorlist = ['#00a8e1', '#99cc00', '#e30039', '#fcd300']
+    fig, (ax_mean, ax_var) = plt.subplots(1, 2, figsize=(14.4, 4.8))
+    for i_filter in filter_list:
+        if type(graph_cdistri_dicts[0]) is list:
+            label_ = 'filter_{}'.format(str(i_filter))
+        else:
+            label_ = None
+        ax_mean.plot(x_truth,graph_cdistri_dict[i_filter],color=colorlist[i_filter],label=label_)
+        ax_var.plot(x_truth,graph_cdistri_var_dict[i_filter],color=colorlist[i_filter],label=label_)
+    ax_mean.tick_params(axis='x', labelrotation=90)
+    ax_mean.set_ylabel('c_distri mean')
+    ax_mean.set_xlabel('truth/num')
+    ax_mean.set_title('{:.5f} the distri of c_distri mean related to truth'.format(scores.mean()))
+    ax_mean.legend()
+    ax_var.tick_params(axis='x', labelrotation=90)
+    ax_var.set_ylabel('c_distri var')
+    ax_var.set_xlabel('truth/num')
+    ax_var.set_title('{:.5f} the distri of c_distri var related to truth'.format(scores.mean()))
+    ax_var.legend()
+    
+    _, mode_dir = osp.split(args.pretrain_path)
+    exp_figure_name = 'c_distri_distribution'
+
+    save_fig(plt, osp.join('img', mode_dir, exp_figure_name), exp_figure_name)
+
+def compri_sim(ground_truth_ged, graph_embs_dicts):
     len_trival                     = len(dataset.trainval_graphs)
     sort_id_mat                    = np.argsort(ground_truth_ged,  kind = 'mergesort')
-    test_gidlist                   = [0, 1, 3, 15, 16]
-    filter_list                    = [0]
+    test_gidlist                   = [10, 20, 30, 40, 50, 60]
+    filter_list                    = [0,1,2,3]
     graph_embs_dist                = dict()
     for i_filter in range(model.num_filter):
         graph_embs_dist[i_filter]  = dict()
-        for name in ['com_sim', 'pri_sim']:
+        for name in ['com_sim', 'selfcp1_sim', 'selfcp2_sim', 'eachpri_sim', 'eachcp12_sim', 'eachcp21_sim']:
              graph_embs_dist[i_filter][name] \
                                    = dict()
     for i_filter in filter_list:
         for test_id in test_gidlist:
             com_sim                = list()
-            pri_sim                = list()
+            selfcp1_sim            = list()
+            selfcp2_sim            = list()
+            eachpri_sim            = list()
+            eachcp12_sim           = list()
+            eachcp21_sim           = list() 
             for traval_id in sort_id_mat[test_id]:
                 com_sim            . append(F.cosine_similarity(torch.Tensor(graph_embs_dicts[i_filter]['com_1'][test_id][traval_id]),
                                                                 torch.Tensor(graph_embs_dicts[i_filter]['com_2'][test_id][traval_id]), dim=-1))
-                pri_sim            . append(F.cosine_similarity(torch.Tensor(graph_embs_dicts[i_filter]['pri_1'][test_id][traval_id]),
+                
+                selfcp1_sim        . append(F.cosine_similarity(torch.Tensor(graph_embs_dicts[i_filter]['com_1'][test_id][traval_id]),
+                                                                torch.Tensor(graph_embs_dicts[i_filter]['pri_1'][test_id][traval_id]), dim=-1))
+                
+                selfcp2_sim        . append(F.cosine_similarity(torch.Tensor(graph_embs_dicts[i_filter]['com_2'][test_id][traval_id]),
                                                                 torch.Tensor(graph_embs_dicts[i_filter]['pri_2'][test_id][traval_id]), dim=-1))
                 
+                eachpri_sim        . append(F.cosine_similarity(torch.Tensor(graph_embs_dicts[i_filter]['pri_1'][test_id][traval_id]),
+                                                                torch.Tensor(graph_embs_dicts[i_filter]['pri_2'][test_id][traval_id]), dim=-1))
+                
+                eachcp12_sim       . append(F.cosine_similarity(torch.Tensor(graph_embs_dicts[i_filter]['com_1'][test_id][traval_id]),
+                                                                torch.Tensor(graph_embs_dicts[i_filter]['pri_2'][test_id][traval_id]), dim=-1))
+                
+                eachcp21_sim       . append(F.cosine_similarity(torch.Tensor(graph_embs_dicts[i_filter]['com_2'][test_id][traval_id]),
+                                                                torch.Tensor(graph_embs_dicts[i_filter]['pri_1'][test_id][traval_id]), dim=-1))
+                                
             graph_embs_dist[i_filter]['com_sim'][test_id] \
                                    = com_sim
-            graph_embs_dist[i_filter]['pri_sim'][test_id] \
-                                   = pri_sim
+            graph_embs_dist[i_filter]['selfcp1_sim'][test_id] \
+                                   = selfcp1_sim
+            graph_embs_dist[i_filter]['selfcp2_sim'][test_id] \
+                                   = selfcp2_sim
+            graph_embs_dist[i_filter]['eachpri_sim'][test_id] \
+                                   = eachpri_sim
+            graph_embs_dist[i_filter]['eachcp12_sim'][test_id] \
+                                   = eachcp12_sim
+            graph_embs_dist[i_filter]['eachcp21_sim'][test_id] \
+                                   = eachcp21_sim
+            
     for i_filter in filter_list:
         for test_id in test_gidlist:
             fig, ax                = plt.subplots(figsize=(7.2, 4.8))
-            # ax.plot(list(range(len_trival)),
-            #         graph_embs_dist[i_filter]['com_sim'][test_id], 
-            #         "k--",
-            #         label="com_sim")
             ax.plot(list(range(len_trival)),
-                    graph_embs_dist[i_filter]['pri_sim'][test_id], 
-                    "k:",
-                    label="pri_sim")
+                    graph_embs_dist[i_filter]['com_sim'][test_id], 
+                    color='#00a8e1',
+                    label="com_sim")
+            ax.plot(list(range(len_trival)),
+                    graph_embs_dist[i_filter]['selfcp1_sim'][test_id], 
+                    color='#99cc00',
+                    label="selfcp1_sim")
+            ax.plot(list(range(len_trival)),
+                    graph_embs_dist[i_filter]['selfcp2_sim'][test_id], 
+                    color='#e30039',
+                    label="selfcp2_sim")
+            ax.plot(list(range(len_trival)),
+                    graph_embs_dist[i_filter]['eachpri_sim'][test_id], 
+                    color='#fcd300',
+                    label="eachpri_sim")
+            ax.plot(list(range(len_trival)),
+                    graph_embs_dist[i_filter]['eachcp12_sim'][test_id], 
+                    color='#800080',
+                    label="eachcp12_sim")
+            ax.plot(list(range(len_trival)),
+                    graph_embs_dist[i_filter]['eachcp21_sim'][test_id], 
+                    color='#00994e',
+                    label="eachcp21_sim")
             ax.legend()
-            plt.savefig('c.png')
+
+            ax.set_title('test_{}_filter_{}\' emb sim to all traval'.format(test_id, i_filter))
+            _, mode_dir = osp.split(args.pretrain_path)
+            exp_figure_name = 'emb_sim'
+            dir_ = osp.join('img', mode_dir, exp_figure_name, 'filter_{}'.format(i_filter))
+            img_name = 'test_{}_emb_sim'.format(test_id)
+
+            save_fig(plt, dir_, img_name)
             plt.close()
-def cos_sim(a, b):
-    a_norm = np.linalg.norm(a)
-    b_norm = np.linalg.norm(b)
-    cos = np.dot(a,b)/(a_norm * b_norm)
-    return cos if not np.isnan(cos) else 0
+def compri_sim_distribution(ground_truth_ged, graph_embs_dicts):
+    ged_max = int(np.max(ground_truth_ged))
+    ged_min = int(np.min(ground_truth_ged))
+    filter_list                    = [0,1,2,3]
+    graph_embs_dist                = dict()
+    for i_filter in range(model.num_filter):
+        graph_embs_dist[i_filter]  = dict()
+        for name in ['com_sim', 'selfcp1_sim', 'selfcp2_sim', 'eachpri_sim', 'eachcp12_sim', 'eachcp21_sim']:
+             graph_embs_dist[i_filter][name] \
+                                   = list()
+             
+    for i_filter in filter_list:
+        for i in range(ged_min, ged_max+1):
+            com_sim                = list()
+            selfcp1_sim            = list()
+            selfcp2_sim            = list()
+            eachpri_sim            = list()
+            eachcp12_sim           = list()
+            eachcp21_sim           = list()
+            for index in np.argwhere(ground_truth_ged == i):
+                com_sim            . append(F.cosine_similarity(torch.Tensor(graph_embs_dicts[i_filter]['com_1'][index[0]][index[1]]),
+                                                                torch.Tensor(graph_embs_dicts[i_filter]['com_2'][index[0]][index[1]]), dim=-1))
+
+                selfcp1_sim        . append(F.cosine_similarity(torch.Tensor(graph_embs_dicts[i_filter]['com_1'][index[0]][index[1]]),
+                                                                torch.Tensor(graph_embs_dicts[i_filter]['pri_1'][index[0]][index[1]]), dim=-1))
+
+                selfcp2_sim        . append(F.cosine_similarity(torch.Tensor(graph_embs_dicts[i_filter]['com_2'][index[0]][index[1]]),
+                                                                torch.Tensor(graph_embs_dicts[i_filter]['pri_2'][index[0]][index[1]]), dim=-1))
+                                                                    
+                eachpri_sim        . append(F.cosine_similarity(torch.Tensor(graph_embs_dicts[i_filter]['pri_1'][index[0]][index[1]]),
+                                                                torch.Tensor(graph_embs_dicts[i_filter]['pri_2'][index[0]][index[1]]), dim=-1))
+
+                eachcp12_sim       . append(F.cosine_similarity(torch.Tensor(graph_embs_dicts[i_filter]['com_1'][index[0]][index[1]]),
+                                                                torch.Tensor(graph_embs_dicts[i_filter]['pri_2'][index[0]][index[1]]), dim=-1))
+
+                eachcp21_sim       . append(F.cosine_similarity(torch.Tensor(graph_embs_dicts[i_filter]['com_2'][index[0]][index[1]]),
+                                                                torch.Tensor(graph_embs_dicts[i_filter]['pri_1'][index[0]][index[1]]), dim=-1))
+
+            graph_embs_dist[i_filter]['com_sim'] \
+                                   . append(np.mean(com_sim))
+            graph_embs_dist[i_filter]['selfcp1_sim'] \
+                                   . append(np.mean(selfcp1_sim))
+            graph_embs_dist[i_filter]['selfcp2_sim'] \
+                                   . append(np.mean(selfcp2_sim))
+            graph_embs_dist[i_filter]['eachpri_sim'] \
+                                   . append(np.mean(eachpri_sim))
+            graph_embs_dist[i_filter]['eachcp12_sim'] \
+                                   . append(np.mean(eachcp12_sim))
+            graph_embs_dist[i_filter]['eachcp21_sim'] \
+                                   . append(np.mean(eachcp21_sim))
+              
+    colorlist                      = ['#00a8e1', '#99cc00', '#e30039', '#fcd300']
+    for name in ['com_sim', 'selfcp1_sim', 'selfcp2_sim', 'eachpri_sim', 'eachcp12_sim', 'eachcp21_sim']:
+        fig, ax                    = plt.subplots(figsize=(7.2, 4.8))
+        for i_filter in filter_list:
+            ax.plot(list(range(ged_min, ged_max+1)),
+                    graph_embs_dist[i_filter][name], 
+                    color=colorlist[i_filter],
+                    label='filter_{}'.format(str(i_filter)))
+        ax.legend()
+        ax.set_ylabel('emb_cossim')
+        ax.set_xlabel('ged')
+        ax.set_title('{} emb cossim related to the distribution of GED'.format(name))
+        _, mode_dir = osp.split(args.pretrain_path)
+        exp_figure_name = 'sim_distribution'
+        dir_ = osp.join('img', mode_dir, exp_figure_name)
+        img_name = '{}_sim_distribution'.format(name)
+
+        save_fig(plt, dir_, img_name)
+        plt.close()
 
 def get_true_result(all_graphs, testing_graphs, trainval_graphs, sim_or_dist = 'dist'):
     ged_matrix                                  = trainval_graphs.ged
@@ -823,7 +996,7 @@ if __name__ == "__main__":
     parser.add_argument('--gpu_id',            type = int  ,            default = 0)
     parser.add_argument('--model',             type = str,              default = 'GSC_GNN')  # GCN, GAT or other
     parser.add_argument('--recache',         action = "store_true",        help = "clean up the old adj data", default=True)
-    parser.add_argument('--pretrain_path',     type = str,              default = 'model_saved/AIDS700nef/2024-03-03_01-26-19')
+    parser.add_argument('--pretrain_path',     type = str,              default = 'model_saved/AIDS700nef/2024-04-19_18-23-26')
     args = parser.parse_args()
     # import os
     # os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
@@ -839,8 +1012,25 @@ if __name__ == "__main__":
     dataset                     = load_data(args, False)
     dataset                     . load(config)
     model                       = DiffDecouple(config, dataset.input_dim).cuda()
+    para                        = osp.join(args.pretrain_path, 'GSC_GNN_{}_checkpoint_mse.pth'.format(args.dataset))
+    model                       . load_state_dict(torch.load(para))
     model                       . eval()
 
-    compri_sim(dataset.testing_graphs, dataset.trainval_graphs, model, dataset, config, args)
+    scores,                        \
+    ground_truth,                  \
+    ground_truth_ged,              \
+    ground_truth_nged,             \
+    prediction_mat,                \
+    graph_embs_dicts,              \
+    graph_cdistri_dicts            = evaluate(dataset.testing_graphs, dataset.trainval_graphs, model, dataset, config)
+
+    # compri_sim_distribution(dataset.testing_graphs, dataset.trainval_graphs, model, dataset, config, args)
+    # compri_distri_distribution(scores, ground_truth, graph_cdistri_dicts)
+    # loss_sim_distribution(scores, ground_truth_ged, ground_truth)
+    # compri_sim_distribution(ground_truth_ged, graph_embs_dicts)
+    emb_hist(ground_truth_ged, graph_embs_dicts)
+    # compri_distri_distribution(scores, ground_truth, graph_cdistri_dicts)
+    # compri_dist_l2(ground_truth_ged, graph_embs_dicts, dataset)
+    # compri_dist_l2(dataset.testing_graphs, dataset.trainval_graphs, model, dataset, config, args)
     # visualize_embeddings_gradual(args, dataset.testing_graphs, dataset.trainval_graphs, model)
 
