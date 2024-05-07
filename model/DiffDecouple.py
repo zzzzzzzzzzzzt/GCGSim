@@ -167,6 +167,9 @@ class DiffDecouple(nn.Module):
         common_feature_2            = list()
         private_feature_1           = list()
         private_feature_2           = list()
+        g1_pool                     = list()
+        g2_pool                     = list()
+
         for i in range(self.num_filter):
             if self.config.get('convolpass', True):
                 conv_source_1       = self.convolutional_pass(self.gnn_list[i], edge_index_1, conv_source_1)
@@ -184,31 +187,19 @@ class DiffDecouple(nn.Module):
                 private_feature_1   .append(self.pri_list[i](conv_source_1, batch_1))
                 private_feature_2   .append(self.pri_list[i](conv_source_2, batch_2))
             elif self.config['graph_encoder'] == 'deepset':
-                output_g            = (
-                                        True
-                                        if (i == self.num_filter-1 and self.config['reconstruction'] == True) or \
-                                            self.config['sim_rat'] == True
-                                        else False
-                                        )
-                
                 _common_feature_1,  \
                 _common_feature_2,  \
                 _private_feature_1, \
                 _private_feature_2, \
-                g1_pool,            \
-                g2_pool             = self.deepset_output(conv_source_1, conv_source_2, batch_1, batch_2, i, output_g)
+                _g1_pool,           \
+                _g2_pool            = self.deepset_output(conv_source_1, conv_source_2, batch_1, batch_2, i, True)
 
-                rat_com             = torch.ones([_common_feature_1.size()[0], 1]).cuda()
-                rat_pri             = torch.ones([_common_feature_1.size()[0], 1]).cuda()
-                if self.config['sim_rat'] == True:
-                    sim_rat         = self.get_sim_rat(g1_pool, g2_pool)
-                    rat_com         = sim_rat
-                    rat_pri         = 1-sim_rat
-                    
-                common_feature_1    .append(rat_com*_common_feature_1)
-                common_feature_2    .append(rat_com*_common_feature_2)
-                private_feature_1   .append(rat_pri*_private_feature_1)
-                private_feature_2   .append(rat_pri*_private_feature_2)
+                common_feature_1    .append(_common_feature_1)
+                common_feature_2    .append(_common_feature_2)
+                private_feature_1   .append(_private_feature_1)
+                private_feature_2   .append(_private_feature_2)
+                g1_pool             .append(_g1_pool)
+                g2_pool             .append(_g2_pool)
 
         if self.emb_log:
             self.com1_list          = common_feature_1
@@ -216,27 +207,27 @@ class DiffDecouple(nn.Module):
             self.pri1_list          = private_feature_1
             self.pri2_list          = private_feature_2
             
+        ged_com, ged_pri            = self.compute_ged_score(common_feature_1, common_feature_2, private_feature_1, private_feature_2)
+        if self.config['sim_rat']:
+            com_Di, pri_Di          = self.get_sim_rat(g1_pool, g2_pool)
+            com_distri, pri_distri  = com_Di, pri_Di
+            common_feature_1, \
+            common_feature_2, \
+            private_feature_1, \
+            private_feature_2       = self.feature_distri(common_feature_1, common_feature_2, private_feature_1, private_feature_2, com_distri, pri_distri)
+
         # computer score and loss
         ntn_score                   = self.compute_ntn_score(common_feature_1, common_feature_2, private_feature_1, private_feature_2)
-        ged_com, ged_pri            = self.compute_ged_score(common_feature_1, common_feature_2, private_feature_1, private_feature_2)
+        # ged_com, ged_pri            = self.compute_ged_score(common_feature_1, common_feature_2, private_feature_1, private_feature_2)
         dis_loss, cor_loss          = self.compute_decouple_loss(common_feature_1, common_feature_2, private_feature_1, private_feature_2)
-        rec_loss                    = (
-                                        self.reconstruction_loss(common_feature_1[-1],
-                                                                 common_feature_2[-1],
-                                                                 private_feature_1[-1],
-                                                                 private_feature_2[-1],
-                                                                 g1_pool,
-                                                                 g2_pool)
-                                        if self.config['reconstruction'] == True
-                                        else 0
-                                        )
+
         # log loss 
         self.dis_loss_log = dis_loss
         self.cor_loss_log = cor_loss
 
         reg_dict = {'ged_com': ged_com, 
                     'ged_pri': ged_pri, 
-                    'reg_loss': dis_loss + cor_loss + rec_loss}
+                    'reg_loss': dis_loss + cor_loss}
         
         return ntn_score, reg_dict
 
@@ -436,7 +427,23 @@ class DiffDecouple(nn.Module):
         return pool
     
     def get_sim_rat(self, pool_1, pool_2):
-        return F.cosine_similarity(pool_1, pool_2, dim=-1).unsqueeze(-1)
+        com_distri = [F.cosine_similarity(pool_1[i], pool_2[i], dim=-1).unsqueeze(-1) for i in range(self.num_filter)]
+        pri_distri = [1 - com_distri[i] for i in range(self.num_filter)]
+        return com_distri, pri_distri
+
+    def feature_distri(self, common_feature_1, common_feature_2, private_feature_1, private_feature_2, com_distri, pri_distri):
+        if type(com_distri) is list:
+            com_1 = [com_distri[i]*common_feature_1[i] for i in range(self.num_filter)]
+            com_2 = [com_distri[i]*common_feature_2[i] for i in range(self.num_filter)]
+            pri_1 = [pri_distri[i]*private_feature_1[i] for i in range(self.num_filter)]
+            pri_2 = [pri_distri[i]*private_feature_2[i] for i in range(self.num_filter)]
+        else:
+            com_1 = [com_distri*common_feature_1[i] for i in range(self.num_filter)]
+            com_2 = [com_distri*common_feature_2[i] for i in range(self.num_filter)]
+            pri_1 = [pri_distri*private_feature_1[i] for i in range(self.num_filter)]
+            pri_2 = [pri_distri*private_feature_2[i] for i in range(self.num_filter)]
+        return com_1, com_2, pri_1, pri_2
+     
     
     def compute_corr(self, x1, x2):
         # Subtract the mean
