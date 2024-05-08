@@ -26,7 +26,7 @@ GSC_GNN:
   synth: False
   scale: 1
   gnn_encoder: 'GIN'
-  graph_encoder: 'deepset'
+  graph_encoder: 'GCA'
   multi_contrast: False
   gnn_filters: [64, 64, 32, 16]
   dropout: 0.0

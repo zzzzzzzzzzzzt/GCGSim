@@ -37,16 +37,16 @@ class DiffDecouple(nn.Module):
         self.gnn_list               = nn.ModuleList()  
         self.NTN_list               = nn.ModuleList()
         self.NTN_ged_list           = nn.ModuleList()
-        if self.config['graph_encoder'] == 'GCA':
-            self.com_list           = nn.ModuleList()  
-            self.pri_list           = nn.ModuleList()
-        elif self.config['graph_encoder'] == 'deepset':
-            self.deepset_inner      = nn.ModuleList()  
-            self.c_deepset_outer    = nn.ModuleList()
-            self.p_deepset_outer    = nn.ModuleList()
-            self.n2gatt             = Node2GraphAttention(self.config)
-            self.act_inner          = getattr(F, self.config.get('deepsets_inner_act', 'relu'))
-            self.act_outer          = getattr(F, self.config.get('deepsets_outer_act', 'relu'))
+        # if self.config['graph_encoder'] == 'GCA':
+        #     self.com_list           = nn.ModuleList()  
+        #     self.pri_list           = nn.ModuleList()
+        # elif self.config['graph_encoder'] == 'deepset':
+        self.deepset_inner      = nn.ModuleList()  
+        self.c_deepset_outer    = nn.ModuleList()
+        self.p_deepset_outer    = nn.ModuleList()
+        self.n2gatt             = Node2GraphAttention(self.config)
+        self.act_inner          = getattr(F, self.config.get('deepsets_inner_act', 'relu'))
+        self.act_outer          = getattr(F, self.config.get('deepsets_outer_act', 'relu'))
 
         self.setup_backbone()
         if self.config.get('setup_disentangle', True):
@@ -101,47 +101,50 @@ class DiffDecouple(nn.Module):
                                                     nn.ReLU())
             
     def setup_disentangle(self):
-        if self.config['graph_encoder'] == 'GCA':
-            for i in range(self.num_filter):
-                self.com_list.append(GlobalContextAware(self.config, self.filters[i]))
-                self.pri_list.append(GlobalContextAware(self.config, self.filters[i]))
-        elif self.config['graph_encoder'] == 'deepset':
-            for i in range(self.num_filter):
-                if self.config['inner_mlp']:
-                    if self.config.get('inner_mlp_layers', 1) == 1:
-                        self.deepset_inner.append(MLPLayers(self.filters[i], 
-                                                            self.filters[i], 
-                                                            None, 
-                                                            num_layers=1, 
-                                                            use_bn=False))
-                    else:
-                        self.deepset_inner.append(MLPLayers(self.filters[i], 
-                                                            self.filters[i], 
-                                                            self.filters[i], 
-                                                            num_layers=self.config['inner_mlp_layers'], 
-                                                            use_bn=False))
-                if self.config.get('outer_mlp_layers', 1) == 1:
-                    self.c_deepset_outer.append(MLPLayers(2*self.filters[i], 
-                                                          self.filters[i], 
-                                                          None, 
-                                                          num_layers=1, 
-                                                          use_bn=False))
-                    self.p_deepset_outer.append(MLPLayers(2*self.filters[i], 
-                                                          self.filters[i], 
-                                                          None, 
-                                                          num_layers=1, 
-                                                          use_bn=False))
+        # if self.config['graph_encoder'] == 'GCA':
+        #     for i in range(self.num_filter):
+        #         self.com_list.append(GlobalContextAware(self.config, self.filters[i]))
+        #         self.pri_list.append(GlobalContextAware(self.config, self.filters[i]))
+        # elif self.config['graph_encoder'] == 'deepset':
+        for i in range(self.num_filter):
+            if self.config['graph_encoder'] == 'deepset':
+                if self.config.get('inner_mlp_layers', 1) == 1:
+                    self.deepset_inner.append(MLPLayers(self.filters[i], 
+                                                        self.filters[i], 
+                                                        None, 
+                                                        num_layers=1, 
+                                                        use_bn=False))
                 else:
-                    self.c_deepset_outer.append(MLPLayers(2*self.filters[i], 
-                                                          self.filters[i], 
-                                                          self.filters[i], 
-                                                          num_layers=self.config['outer_mlp_layers'], 
-                                                          use_bn=False))
-                    self.p_deepset_outer.append(MLPLayers(2*self.filters[i], 
-                                                          self.filters[i], 
-                                                          self.filters[i], 
-                                                          num_layers=self.config['outer_mlp_layers'], 
-                                                          use_bn=False))
+                    self.deepset_inner.append(MLPLayers(self.filters[i], 
+                                                        self.filters[i], 
+                                                        self.filters[i], 
+                                                        num_layers=self.config['inner_mlp_layers'], 
+                                                        use_bn=False))
+            elif self.config['graph_encoder'] == 'GCA':
+                self.deepset_inner.append(GlobalContextAware(self.config, self.filters[i]))
+
+            if self.config.get('outer_mlp_layers', 1) == 1:
+                self.c_deepset_outer.append(MLPLayers(2*self.filters[i], 
+                                                        self.filters[i], 
+                                                        None, 
+                                                        num_layers=1, 
+                                                        use_bn=False))
+                self.p_deepset_outer.append(MLPLayers(2*self.filters[i], 
+                                                        self.filters[i], 
+                                                        None, 
+                                                        num_layers=1, 
+                                                        use_bn=False))
+            else:
+                self.c_deepset_outer.append(MLPLayers(2*self.filters[i], 
+                                                        self.filters[i], 
+                                                        self.filters[i], 
+                                                        num_layers=self.config['outer_mlp_layers'], 
+                                                        use_bn=False))
+                self.p_deepset_outer.append(MLPLayers(2*self.filters[i], 
+                                                        self.filters[i], 
+                                                        self.filters[i], 
+                                                        num_layers=self.config['outer_mlp_layers'], 
+                                                        use_bn=False))
 
     def forward(self, data):
         edge_index_1                = data['g1'].edge_index.cuda()
@@ -178,28 +181,28 @@ class DiffDecouple(nn.Module):
                 conv_source_1       = self.gnn_list[i](conv_source_1, edge_index_1)
                 conv_source_2       = self.gnn_list[i](conv_source_2, edge_index_2)
 
-            if self.config['graph_encoder'] == 'GCA': 
-                # generate common feature
-                common_feature_1    .append(self.com_list[i](conv_source_1, batch_1))
-                common_feature_2    .append(self.com_list[i](conv_source_2, batch_2))
+            # if self.config['graph_encoder'] == 'GCA': 
+            #     # generate common feature
+            #     common_feature_1    .append(self.com_list[i](conv_source_1, batch_1))
+            #     common_feature_2    .append(self.com_list[i](conv_source_2, batch_2))
 
-                # generate private feature
-                private_feature_1   .append(self.pri_list[i](conv_source_1, batch_1))
-                private_feature_2   .append(self.pri_list[i](conv_source_2, batch_2))
-            elif self.config['graph_encoder'] == 'deepset':
-                _common_feature_1,  \
-                _common_feature_2,  \
-                _private_feature_1, \
-                _private_feature_2, \
-                _g1_pool,           \
-                _g2_pool            = self.deepset_output(conv_source_1, conv_source_2, batch_1, batch_2, i, True)
+            #     # generate private feature
+            #     private_feature_1   .append(self.pri_list[i](conv_source_1, batch_1))
+            #     private_feature_2   .append(self.pri_list[i](conv_source_2, batch_2))
+            # elif self.config['graph_encoder'] == 'deepset':
+            _common_feature_1,  \
+            _common_feature_2,  \
+            _private_feature_1, \
+            _private_feature_2, \
+            _g1_pool,           \
+            _g2_pool            = self.deepset_output(conv_source_1, conv_source_2, batch_1, batch_2, i, True)
 
-                common_feature_1    .append(_common_feature_1)
-                common_feature_2    .append(_common_feature_2)
-                private_feature_1   .append(_private_feature_1)
-                private_feature_2   .append(_private_feature_2)
-                g1_pool             .append(_g1_pool)
-                g2_pool             .append(_g2_pool)
+            common_feature_1    .append(_common_feature_1)
+            common_feature_2    .append(_common_feature_2)
+            private_feature_1   .append(_private_feature_1)
+            private_feature_2   .append(_private_feature_2)
+            g1_pool             .append(_g1_pool)
+            g2_pool             .append(_g2_pool)
 
         if self.emb_log:
             self.com1_list          = common_feature_1
@@ -393,16 +396,23 @@ class DiffDecouple(nn.Module):
         return feat
 
     def deepset_output(self, x1, x2, batch1, batch2, filter_idx, out=False):
-        # deepset inner pass
-        deepsets_inner_1 = self.act_inner(self.deepset_inner[filter_idx](x1))
-        deepsets_inner_2 = self.act_inner(self.deepset_inner[filter_idx](x2))
+        if self.config['graph_encoder'] == 'deepset':
+            # deepset inner pass
+            deepsets_inner_1 = self.act_inner(self.deepset_inner[filter_idx](x1))
+            deepsets_inner_2 = self.act_inner(self.deepset_inner[filter_idx](x2))
 
-        pool_1 = self._pool(deepsets_inner_1, batch1)
-        pool_2 = self._pool(deepsets_inner_2, batch2)
+            pool_1 = self._pool(deepsets_inner_1, batch1)
+            pool_2 = self._pool(deepsets_inner_2, batch2)
 
-        att_1with_2 = self.n2gatt(deepsets_inner_1, pool_2, batch1)
-        att_2with_1 = self.n2gatt(deepsets_inner_2, pool_1, batch2)
-        
+            att_1with_2 = self.n2gatt(deepsets_inner_1, pool_2, batch1)
+            att_2with_1 = self.n2gatt(deepsets_inner_2, pool_1, batch2)
+        elif self.config['graph_encoder'] == 'GCA':
+            pool_1 = self.deepset_inner[filter_idx](x1, batch1)
+            pool_2 = self.deepset_inner[filter_idx](x2, batch2)
+
+            att_1with_2 = self.n2gatt(x1, pool_2, batch1)
+            att_2with_1 = self.n2gatt(x2, pool_1, batch2)
+
         g1_embedding_att = torch.cat((pool_1, att_1with_2), dim=-1)
         g2_embedding_att = torch.cat((pool_2, att_2with_1), dim=-1)
 
