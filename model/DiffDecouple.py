@@ -336,17 +336,17 @@ class DiffDecouple(nn.Module):
             private_feature_1 = self.add_noise(private_feature_1)
             private_feature_2 = self.add_noise(private_feature_2)
 
-        dis_com =  torch.cat([f(F.cosine_similarity(common_feature_1[i], common_feature_2[i], dim=-1)) for i in range(self.num_filter)], dim=0)
-        dis_cp1 =  torch.cat([f(F.cosine_similarity(common_feature_1[i], private_feature_1[i], dim=-1)) for i in range(self.num_filter)], dim=0)
-        dis_cp2 =  torch.cat([f(F.cosine_similarity(common_feature_2[i], private_feature_2[i], dim=-1)) for i in range(self.num_filter)], dim=0)
+        dis_com =  torch.cat([f(torch.abs(F.cosine_similarity(common_feature_1[i], common_feature_2[i], dim=-1))) for i in range(self.num_filter)], dim=0)
+        dis_cp1 =  torch.cat([f(torch.abs(F.cosine_similarity(common_feature_1[i], private_feature_1[i], dim=-1))) for i in range(self.num_filter)], dim=0)
+        dis_cp2 =  torch.cat([f(torch.abs(F.cosine_similarity(common_feature_2[i], private_feature_2[i], dim=-1))) for i in range(self.num_filter)], dim=0)
 
         center_common_1 = self.mean_centering(common_feature_1)
         center_common_2 = self.mean_centering(common_feature_2)
         center_private_1 = self.mean_centering(private_feature_1)
         center_private_2 = self.mean_centering(private_feature_2)
 
-        dis_mean_cp1 =  torch.cat([f(F.cosine_similarity(center_common_1[i], center_private_1[i], dim=-1)) for i in range(self.num_filter)], dim=0)
-        dis_mean_cp2 =  torch.cat([f(F.cosine_similarity(center_common_2[i], center_private_2[i], dim=-1)) for i in range(self.num_filter)], dim=0)
+        dis_mean_cp1 =  torch.cat([f(torch.abs(F.cosine_similarity(center_common_1[i], center_private_1[i], dim=-1))) for i in range(self.num_filter)], dim=0)
+        dis_mean_cp2 =  torch.cat([f(torch.abs(F.cosine_similarity(center_common_2[i], center_private_2[i], dim=-1))) for i in range(self.num_filter)], dim=0)
 
         self.sim_com_log = dis_com.mean()
         self.sim_pri1_log = dis_cp1.mean()
@@ -511,7 +511,7 @@ class DiffDecouple(nn.Module):
         return [x[i] - torch.mean(x[i], dim=-1, keepdim=True) for i in range(self.num_filter)]
     
     def add_noise(self, x):
-        return [x[i] + torch.normal(mean=0.0, std=1e-7, size=x[i].shape).cuda() for i in range(self.num_filter)]
+        return [x[i] + torch.normal(mean=0.0, std=1e-5, size=x[i].shape).cuda() for i in range(self.num_filter)]
     
     def shape_for_corr(self, x1, x2):
         if x1.size()[0] == self.config['batch_size']:
