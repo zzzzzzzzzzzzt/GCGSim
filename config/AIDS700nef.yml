@@ -26,7 +26,7 @@ GSC_GNN:
   synth: False
   scale: 1
   gnn_encoder: 'GIN'
-  graph_encoder: 'GCA'
+  graph_encoder: 'deepset'
   multi_contrast: False
   gnn_filters: [64, 64, 32, 16]
   dropout: 0.0
@@ -49,7 +49,7 @@ GSC_GNN:
   tensor_neurons: 16
   output_comb: True
   use_ssl: True
-  use_pre: True
+  use_pre: False
   use_deepsets: False
   use_ff: False
   measure: 'JSD'
