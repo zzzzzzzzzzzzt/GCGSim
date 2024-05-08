@@ -64,7 +64,7 @@ def main(args, config, logger: Logger, run_id: int, dataset: DatasetLocal):
             if config['board_log']:
                 writer               .add_scalar('loss/total', loss, log_i)
                 writer               .add_scalar('loss/dis_loss', model.dis_loss_log, log_i)
-                writer               .add_scalar('loss/cor_loss', model.cor_loss_log, log_i)
+                # writer               .add_scalar('loss/cor_loss', model.cor_loss_log, log_i)
                 writer               .add_scalar('sim/com', model.sim_com_log, log_i)
                 writer               .add_scalar('sim/sim_pri1', model.sim_pri1_log, log_i)
                 writer               .add_scalar('sim/sim_pri2', model.sim_pri2_log, log_i)

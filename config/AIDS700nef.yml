@@ -21,7 +21,7 @@ GSC_GNN:
   optimizer: 'Adam'
   num_layers: 2
   activation: 'relu'
-  multirun: 1
+  multirun: 2
   feat_norm: False
   synth: False
   scale: 1
@@ -59,6 +59,7 @@ GSC_GNN:
   board_log: True
   reconstruction: False
   sim_rat: True
+  noise: True
 
 SimGNN:
   patience: -1
