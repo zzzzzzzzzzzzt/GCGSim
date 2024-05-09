@@ -49,7 +49,8 @@ GSC_GNN:
   tensor_neurons: 16
   output_comb: True
   use_ssl: True
-  use_pre: False
+  use_compre: False
+  use_pripre: True
   use_deepsets: False
   use_ff: False
   measure: 'JSD'
