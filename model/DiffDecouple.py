@@ -12,6 +12,7 @@ from utils.gan_losses import get_negative_expectation, get_positive_expectation
 from collections import OrderedDict, defaultdict
 import numpy as np
 from torchmetrics.regression import PearsonCorrCoef
+from functools import partial
 
 class DiffDecouple(nn.Module):
     def __init__(self, config, n_feat):
@@ -45,8 +46,17 @@ class DiffDecouple(nn.Module):
         self.c_deepset_outer    = nn.ModuleList()
         self.p_deepset_outer    = nn.ModuleList()
         self.n2gatt             = Node2GraphAttention(self.config)
-        self.act_inner          = getattr(F, self.config.get('deepsets_inner_act', 'relu'))
-        self.act_outer          = getattr(F, self.config.get('deepsets_outer_act', 'relu'))
+        self.negative_slope     = 0.01
+        if self.config['deepsets_inner_act'] == 'relu':
+            self.act_inner      = F.relu
+        elif self.config['deepsets_inner_act'] == 'leaky_relu':
+            self.act_inner      = partial(F.leaky_relu, negative_slope=self.negative_slope)
+        if self.config['deepsets_outer_act'] == 'relu':
+            self.act_outer      = F.relu
+        elif self.config['deepsets_outer_act'] == 'leaky_relu':
+            self.act_outer      = partial(F.leaky_relu, negative_slope=self.negative_slope)
+        # self.act_inner          = getattr(F, self.config.get('deepsets_inner_act', 'relu'))
+        # self.act_outer          = getattr(F, self.config.get('deepsets_outer_act', 'relu'))
 
         self.setup_backbone()
         if self.config.get('setup_disentangle', True):

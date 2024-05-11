@@ -33,7 +33,7 @@ GSC_GNN:
   deepsets: True
   use_bn: False
   deepsets_inner_act: 'relu'
-  deepsets_outer_act: 'relu'
+  deepsets_outer_act: 'leaky_relu'
   fuse_type: 'cat'
   pooling: 'add'
   reduction: 2
@@ -50,7 +50,7 @@ GSC_GNN:
   output_comb: True
   use_ssl: True
   use_compre: False
-  use_pripre: True
+  use_pripre: False
   use_deepsets: False
   use_ff: False
   measure: 'JSD'
