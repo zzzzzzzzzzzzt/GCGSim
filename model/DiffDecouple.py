@@ -90,11 +90,11 @@ class DiffDecouple(nn.Module):
             raise NotImplementedError("Unknown GNN-Operator.")
 
         if self.config['NTN_layers'] == 1:
-            self.NTN_list.append(TensorNetworkModule(self.config, 2*self.filters[-1]))
+            self.NTN_list.append(TensorNetworkModule(self.config, self.filters[-1]))
         elif self.config['NTN_layers'] == self.num_filter:
             for i in range(self.num_filter):
-                self.NTN_list.append(TensorNetworkModule(self.config, 2*self.filters[i]))
-                self.NTN_ged_list.append(TensorNetworkModule(self.config, self.filters[i]))
+                self.NTN_list.append(TensorNetworkModule(self.config, self.filters[i]))
+                self.NTN_ged_list.append(TensorNetworkModule(self.config, int(self.filters[i]/2)))
         else:
             raise NotImplementedError("Error NTN_layer number.")
          
@@ -135,12 +135,12 @@ class DiffDecouple(nn.Module):
 
             if self.config.get('outer_mlp_layers', 1) == 1:
                 self.c_deepset_outer.append(MLPLayers(2*self.filters[i], 
-                                                        self.filters[i], 
+                                                        int(self.filters[i]/2), 
                                                         None, 
                                                         num_layers=1, 
                                                         use_bn=False))
                 self.p_deepset_outer.append(MLPLayers(2*self.filters[i], 
-                                                        self.filters[i], 
+                                                        int(self.filters[i]/2), 
                                                         None, 
                                                         num_layers=1, 
                                                         use_bn=False))
