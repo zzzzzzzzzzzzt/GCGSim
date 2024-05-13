@@ -61,6 +61,7 @@ GSC_GNN:
   reconstruction: False
   sim_rat: True
   noise: True
+  cat_disloss: True
 
 SimGNN:
   patience: -1

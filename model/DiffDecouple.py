@@ -90,11 +90,11 @@ class DiffDecouple(nn.Module):
             raise NotImplementedError("Unknown GNN-Operator.")
 
         if self.config['NTN_layers'] == 1:
-            self.NTN_list.append(TensorNetworkModule(self.config, self.filters[-1]))
+            self.NTN_list.append(TensorNetworkModule(self.config, 2*self.filters[-1]))
         elif self.config['NTN_layers'] == self.num_filter:
             for i in range(self.num_filter):
-                self.NTN_list.append(TensorNetworkModule(self.config, self.filters[i]))
-                self.NTN_ged_list.append(TensorNetworkModule(self.config, int(self.filters[i]/2)))
+                self.NTN_list.append(TensorNetworkModule(self.config, 2*self.filters[i]))
+                self.NTN_ged_list.append(TensorNetworkModule(self.config, self.filters[i]))
         else:
             raise NotImplementedError("Error NTN_layer number.")
          
@@ -135,12 +135,12 @@ class DiffDecouple(nn.Module):
 
             if self.config.get('outer_mlp_layers', 1) == 1:
                 self.c_deepset_outer.append(MLPLayers(2*self.filters[i], 
-                                                        int(self.filters[i]/2), 
+                                                        self.filters[i], 
                                                         None, 
                                                         num_layers=1, 
                                                         use_bn=False))
                 self.p_deepset_outer.append(MLPLayers(2*self.filters[i], 
-                                                        int(self.filters[i]/2), 
+                                                        self.filters[i], 
                                                         None, 
                                                         num_layers=1, 
                                                         use_bn=False))
@@ -232,7 +232,7 @@ class DiffDecouple(nn.Module):
         # computer score and loss
         ntn_score                   = self.compute_ntn_score(common_feature_1, common_feature_2, private_feature_1, private_feature_2)
         # ged_com, ged_pri            = self.compute_ged_score(common_feature_1, common_feature_2, private_feature_1, private_feature_2)
-        dis_loss                    = self.compute_distance_loss(common_feature_1, common_feature_2, private_feature_1, private_feature_2)
+        dis_loss                    = self.compute_distance_loss(common_feature_1, common_feature_2, private_feature_1, private_feature_2, self.config['cat_disloss'])
 
         # log loss 
         self.dis_loss_log = dis_loss
@@ -337,26 +337,33 @@ class DiffDecouple(nn.Module):
         self.sim_pri2_log           = sim_pri2.mean()
         return -torch.log(sim_com/(sim_com + sim_pri1 + sim_pri2)).mean(), cor_loss_1.mean() + cor_loss_2.mean()
 
-    def compute_distance_loss(self, common_feature_1, common_feature_2, private_feature_1, private_feature_2):
+    def compute_distance_loss(self, common_feature_1, common_feature_2, private_feature_1, private_feature_2, cat = False):
         f = lambda x: torch.exp(x / self.config.get('tau', 1))
 
+        if cat:
+            common_feature_1 = [torch.cat(common_feature_1, dim=-1)]
+            common_feature_2 = [torch.cat(common_feature_2, dim=-1)]
+            private_feature_1 = [torch.cat(private_feature_1, dim=-1)]
+            private_feature_2 = [torch.cat(private_feature_2, dim=-1)]
+
+        len_list = len(common_feature_1)
         if self.config['noise']:
             common_feature_1 = self.add_noise(common_feature_1)
             common_feature_2 = self.add_noise(common_feature_2)
             private_feature_1 = self.add_noise(private_feature_1)
             private_feature_2 = self.add_noise(private_feature_2)
 
-        dis_com =  torch.cat([f(torch.abs(F.cosine_similarity(common_feature_1[i], common_feature_2[i], dim=-1))) for i in range(self.num_filter)], dim=0)
-        dis_cp1 =  torch.cat([f(torch.abs(F.cosine_similarity(common_feature_1[i], private_feature_1[i], dim=-1))) for i in range(self.num_filter)], dim=0)
-        dis_cp2 =  torch.cat([f(torch.abs(F.cosine_similarity(common_feature_2[i], private_feature_2[i], dim=-1))) for i in range(self.num_filter)], dim=0)
+        dis_com =  torch.cat([f(torch.abs(F.cosine_similarity(common_feature_1[i], common_feature_2[i], dim=-1))) for i in range(len_list)], dim=0)
+        dis_cp1 =  torch.cat([f(torch.abs(F.cosine_similarity(common_feature_1[i], private_feature_1[i], dim=-1))) for i in range(len_list)], dim=0)
+        dis_cp2 =  torch.cat([f(torch.abs(F.cosine_similarity(common_feature_2[i], private_feature_2[i], dim=-1))) for i in range(len_list)], dim=0)
 
         center_common_1 = self.mean_centering(common_feature_1)
         center_common_2 = self.mean_centering(common_feature_2)
         center_private_1 = self.mean_centering(private_feature_1)
         center_private_2 = self.mean_centering(private_feature_2)
 
-        dis_mean_cp1 =  torch.cat([f(torch.abs(F.cosine_similarity(center_common_1[i], center_private_1[i], dim=-1))) for i in range(self.num_filter)], dim=0)
-        dis_mean_cp2 =  torch.cat([f(torch.abs(F.cosine_similarity(center_common_2[i], center_private_2[i], dim=-1))) for i in range(self.num_filter)], dim=0)
+        dis_mean_cp1 =  torch.cat([f(torch.abs(F.cosine_similarity(center_common_1[i], center_private_1[i], dim=-1))) for i in range(len_list)], dim=0)
+        dis_mean_cp2 =  torch.cat([f(torch.abs(F.cosine_similarity(center_common_2[i], center_private_2[i], dim=-1))) for i in range(len_list)], dim=0)
 
         self.sim_com_log = dis_com.mean()
         self.sim_pri1_log = dis_cp1.mean()
@@ -518,10 +525,10 @@ class DiffDecouple(nn.Module):
         return corr
     
     def mean_centering(self, x):
-        return [x[i] - torch.mean(x[i], dim=-1, keepdim=True) for i in range(self.num_filter)]
+        return [x[i] - torch.mean(x[i], dim=-1, keepdim=True) for i in range(len(x))]
     
     def add_noise(self, x):
-        return [x[i] + torch.normal(mean=0.0, std=1e-5, size=x[i].shape).cuda() for i in range(self.num_filter)]
+        return [x[i] + torch.normal(mean=0.0, std=1e-5, size=x[i].shape).cuda() for i in range(len(x))]
     
     def shape_for_corr(self, x1, x2):
         if x1.size()[0] == self.config['batch_size']:
