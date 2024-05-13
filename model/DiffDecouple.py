@@ -7,7 +7,7 @@ import torch.nn as nn
 from torch_geometric.nn import GCNConv, GINConv, GATConv
 import torch.nn.functional as F   
 from torch_geometric.nn.glob import global_add_pool, global_mean_pool
-from model.layers import AttentionModule, MLPLayers, TensorNetworkModule, FF, GlobalContextAware, Node2GraphAttention
+from model.layers import AttentionModule, MLPLayers, TensorNetworkModule, FF, GlobalContextAware, Node2GraphAttention, MLP
 from utils.gan_losses import get_negative_expectation, get_positive_expectation
 from collections import OrderedDict, defaultdict
 import numpy as np
@@ -145,16 +145,16 @@ class DiffDecouple(nn.Module):
                                                         num_layers=1, 
                                                         use_bn=False))
             else:
-                self.c_deepset_outer.append(MLPLayers(2*self.filters[i], 
+                self.c_deepset_outer.append(MLP(2*self.filters[i], 
                                                         self.filters[i], 
                                                         self.filters[i], 
                                                         num_layers=self.config['outer_mlp_layers'], 
-                                                        use_bn=False))
-                self.p_deepset_outer.append(MLPLayers(2*self.filters[i], 
+                                                        use_bn=True))
+                self.p_deepset_outer.append(MLP(2*self.filters[i], 
                                                         self.filters[i], 
                                                         self.filters[i], 
                                                         num_layers=self.config['outer_mlp_layers'], 
-                                                        use_bn=False))
+                                                        use_bn=True))
 
     def forward(self, data):
         edge_index_1                = data['g1'].edge_index.cuda()

@@ -39,7 +39,7 @@ GSC_GNN:
   reduction: 2
   inner_mlp: True
   inner_mlp_layers: 1
-  outer_mlp_layers: 1
+  outer_mlp_layers: 2
   use_mlp_score: True
   mlp_score_layer: 2
   batch_size: 128
@@ -61,7 +61,7 @@ GSC_GNN:
   reconstruction: False
   sim_rat: True
   noise: True
-  cat_disloss: True
+  cat_disloss: False
 
 SimGNN:
   patience: -1
