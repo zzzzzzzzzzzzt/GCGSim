@@ -80,7 +80,7 @@ def evaluate(testing_graphs, training_graphs, model, dataset: DatasetLocal, conf
 
     return scores, ground_truth, ground_truth_ged, ground_truth_nged, prediction_mat, graph_embs_dicts, graph_cdistri_dicts
 
-def loss_sim_distribution(scores, ground_truth_ged, ground_truth):
+def loss_sim_distribution(scores, ground_truth_ged, ground_truth, prediction_mat):
     ged_max = int(np.max(ground_truth_ged))
     ged_min = int(np.min(ground_truth_ged))
     ged = []
@@ -106,6 +106,15 @@ def loss_sim_distribution(scores, ground_truth_ged, ground_truth):
         nged.append('{:.1f}-{:.1f}/{}'.format(i*step, (i+1)*step, find_num))
         nloss.append(find_average)
 
+    nged = []
+    ngt = []
+    for i in range(nstep):
+        find = np.where((ground_truth>=i*step) & (ground_truth<(i+1)*step), prediction_mat, 0.0)
+        find_num = len(np.nonzero(find)[0])
+        find_average = find.sum()/find_num
+        nged.append('{:.1f}-{:.1f}/{}'.format(i*step, (i+1)*step, find_num))
+        ngt.append(find_average)
+
     fig, (ax_ged, ax_nged) = plt.subplots(1, 2, figsize=(14.4, 4.8))
 
     ax_ged.bar(ged, loss, width=0.5)
@@ -125,6 +134,16 @@ def loss_sim_distribution(scores, ground_truth_ged, ground_truth):
     exp_figure_name = 'loss_distribution'
 
     save_fig(plt, osp.join('img', mode_dir, exp_figure_name), exp_figure_name)
+    plt.close()
+
+    fig, ax = plt.subplots(figsize=(7.2, 4.8))
+    ax.bar(nged, ngt, width=0.5)
+    ax.tick_params(axis='x', labelrotation=90)
+    ax.set_ylabel('pre average')
+    ax.set_xlabel('nged/num')
+    ax.set_title('{:.5f} gt related to the distribution of GED'.format(scores.mean()))
+    
+    save_fig(plt, osp.join('img', mode_dir, exp_figure_name), 'pre_distribution')
 
 def compri_dist_l2(ground_truth_ged, graph_embs_dicts, dataset):
     len_trival                     = len(dataset.trainval_graphs)
@@ -996,7 +1015,7 @@ if __name__ == "__main__":
     parser.add_argument('--gpu_id',            type = int  ,            default = 0)
     parser.add_argument('--model',             type = str,              default = 'GSC_GNN')  # GCN, GAT or other
     parser.add_argument('--recache',         action = "store_true",        help = "clean up the old adj data", default=True)
-    parser.add_argument('--pretrain_path',     type = str,              default = 'model_saved/AIDS700nef/2024-04-19_18-23-26')
+    parser.add_argument('--pretrain_path',     type = str,              default = 'model_saved/AIDS700nef/2024-05-08_21-30-01')
     args = parser.parse_args()
     # import os
     # os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
@@ -1028,7 +1047,8 @@ if __name__ == "__main__":
     # compri_distri_distribution(scores, ground_truth, graph_cdistri_dicts)
     # loss_sim_distribution(scores, ground_truth_ged, ground_truth)
     # compri_sim_distribution(ground_truth_ged, graph_embs_dicts)
-    emb_hist(ground_truth_ged, graph_embs_dicts)
+    loss_sim_distribution(scores, ground_truth_ged, ground_truth, prediction_mat)
+    # emb_hist(ground_truth_ged, graph_embs_dicts)
     # compri_distri_distribution(scores, ground_truth, graph_cdistri_dicts)
     # compri_dist_l2(ground_truth_ged, graph_embs_dicts, dataset)
     # compri_dist_l2(dataset.testing_graphs, dataset.trainval_graphs, model, dataset, config, args)
