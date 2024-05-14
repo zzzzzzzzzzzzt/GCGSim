@@ -26,7 +26,7 @@ GSC_GNN:
   synth: False
   scale: 1
   gnn_encoder: 'GIN'
-  graph_encoder: 'deepset'
+  graph_encoder: 'None'
   multi_contrast: False
   gnn_filters: [64, 64, 32, 16]
   dropout: 0.0
@@ -39,7 +39,7 @@ GSC_GNN:
   reduction: 2
   inner_mlp: True
   inner_mlp_layers: 1
-  outer_mlp_layers: 2
+  outer_mlp_layers: 1
   use_mlp_score: True
   mlp_score_layer: 2
   batch_size: 128

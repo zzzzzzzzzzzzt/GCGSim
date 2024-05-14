@@ -132,6 +132,8 @@ class DiffDecouple(nn.Module):
                                                         use_bn=False))
             elif self.config['graph_encoder'] == 'GCA':
                 self.deepset_inner.append(GlobalContextAware(self.config, self.filters[i]))
+            elif self.config['graph_encoder'] == 'None':
+                pass
 
             if self.config.get('outer_mlp_layers', 1) == 1:
                 self.c_deepset_outer.append(MLPLayers(2*self.filters[i], 
@@ -432,6 +434,12 @@ class DiffDecouple(nn.Module):
         elif self.config['graph_encoder'] == 'GCA':
             pool_1 = self.deepset_inner[filter_idx](x1, batch1)
             pool_2 = self.deepset_inner[filter_idx](x2, batch2)
+
+            att_1with_2 = self.n2gatt(x1, pool_2, batch1)
+            att_2with_1 = self.n2gatt(x2, pool_1, batch2)
+        elif self.config['graph_encoder'] == 'None':
+            pool_1 = self._pool(x1, batch1)
+            pool_2 = self._pool(x2, batch2)
 
             att_1with_2 = self.n2gatt(x1, pool_2, batch1)
             att_2with_1 = self.n2gatt(x2, pool_1, batch2)
