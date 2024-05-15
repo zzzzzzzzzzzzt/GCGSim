@@ -356,8 +356,8 @@ class DiffDecouple(nn.Module):
             private_feature_2 = self.add_noise(private_feature_2)
 
         dis_com =  torch.cat([f(torch.abs(F.cosine_similarity(common_feature_1[i], common_feature_2[i], dim=-1))) for i in range(len_list)], dim=0)
-        dis_cp1 =  torch.cat([f(torch.abs(F.cosine_similarity(common_feature_1[i], private_feature_1[i], dim=-1))) for i in range(len_list)], dim=0)
-        dis_cp2 =  torch.cat([f(torch.abs(F.cosine_similarity(common_feature_2[i], private_feature_2[i], dim=-1))) for i in range(len_list)], dim=0)
+        dis_cp1 =  torch.cat([f(torch.abs(F.cosine_similarity(common_feature_1[i].detach(), private_feature_1[i], dim=-1))) for i in range(len_list)], dim=0)
+        dis_cp2 =  torch.cat([f(torch.abs(F.cosine_similarity(common_feature_2[i].detach(), private_feature_2[i], dim=-1))) for i in range(len_list)], dim=0)
         dis_cg1 =  torch.cat([f(torch.abs(F.cosine_similarity(common_feature_1[i], g1_pool[i].detach(), dim=-1))) for i in range(len_list)], dim=0)
         dis_cg2 =  torch.cat([f(torch.abs(F.cosine_similarity(common_feature_2[i], g2_pool[i].detach(), dim=-1))) for i in range(len_list)], dim=0)
 
