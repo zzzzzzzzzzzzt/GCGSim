@@ -59,7 +59,7 @@ GSC_GNN:
   sep: False
   board_log: True
   reconstruction: False
-  sim_rat: True
+  sim_rat: False
   noise: True
   cat_disloss: False
 

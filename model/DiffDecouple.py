@@ -234,7 +234,7 @@ class DiffDecouple(nn.Module):
         # computer score and loss
         ntn_score                   = self.compute_ntn_score(common_feature_1, common_feature_2, private_feature_1, private_feature_2)
         # ged_com, ged_pri            = self.compute_ged_score(common_feature_1, common_feature_2, private_feature_1, private_feature_2)
-        dis_loss                    = self.compute_distance_loss(common_feature_1, common_feature_2, private_feature_1, private_feature_2, self.config['cat_disloss'])
+        dis_loss                    = self.compute_distance_loss(common_feature_1, common_feature_2, private_feature_1, private_feature_2, g1_pool, g2_pool, self.config['cat_disloss'])
 
         # log loss 
         self.dis_loss_log = dis_loss
@@ -339,7 +339,7 @@ class DiffDecouple(nn.Module):
         self.sim_pri2_log           = sim_pri2.mean()
         return -torch.log(sim_com/(sim_com + sim_pri1 + sim_pri2)).mean(), cor_loss_1.mean() + cor_loss_2.mean()
 
-    def compute_distance_loss(self, common_feature_1, common_feature_2, private_feature_1, private_feature_2, cat = False):
+    def compute_distance_loss(self, common_feature_1, common_feature_2, private_feature_1, private_feature_2, g1_pool, g2_pool, cat = False):
         f = lambda x: torch.exp(x / self.config.get('tau', 1))
 
         if cat:
@@ -358,6 +358,8 @@ class DiffDecouple(nn.Module):
         dis_com =  torch.cat([f(torch.abs(F.cosine_similarity(common_feature_1[i], common_feature_2[i], dim=-1))) for i in range(len_list)], dim=0)
         dis_cp1 =  torch.cat([f(torch.abs(F.cosine_similarity(common_feature_1[i], private_feature_1[i], dim=-1))) for i in range(len_list)], dim=0)
         dis_cp2 =  torch.cat([f(torch.abs(F.cosine_similarity(common_feature_2[i], private_feature_2[i], dim=-1))) for i in range(len_list)], dim=0)
+        dis_cg1 =  torch.cat([f(torch.abs(F.cosine_similarity(common_feature_1[i], g1_pool[i], dim=-1))) for i in range(len_list)], dim=0)
+        dis_cg2 =  torch.cat([f(torch.abs(F.cosine_similarity(common_feature_2[i], g2_pool[i], dim=-1))) for i in range(len_list)], dim=0)
 
         center_common_1 = self.mean_centering(common_feature_1)
         center_common_2 = self.mean_centering(common_feature_2)
@@ -370,10 +372,12 @@ class DiffDecouple(nn.Module):
         self.sim_com_log = dis_com.mean()
         self.sim_pri1_log = dis_cp1.mean()
         self.sim_pri2_log = dis_cp2.mean()
+        self.dis_cg1_log = dis_cg1.mean()
+        self.dis_cg2_log = dis_cg2.mean()
         self.dis_mean_cp1_log = dis_mean_cp1.mean()
         self.dis_mean_cp2_log = dis_mean_cp2.mean()
         
-        return ((dis_cp1+dis_cp2+dis_mean_cp1+dis_mean_cp2)/dis_com).mean()
+        return ((dis_cp1+dis_cp2)/(dis_com+dis_cg1+dis_cg2)).mean()
 
     def compute_ntn_score(self, common_feature_1, 
                         common_feature_2,

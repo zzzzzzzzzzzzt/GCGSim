@@ -75,6 +75,8 @@ def main(args, config, logger: Logger, run_id: int, dataset: DatasetLocal):
                 writer               .add_scalar('sim/com', model.sim_com_log, log_i)
                 writer               .add_scalar('sim/sim_pri1', model.sim_pri1_log, log_i)
                 writer               .add_scalar('sim/sim_pri2', model.sim_pri2_log, log_i)
+                writer               .add_scalar('sim/dis_cg1', model.dis_cg1_log, log_i)
+                writer               .add_scalar('sim/dis_cg2', model.dis_cg2_log, log_i)
                 writer               .add_scalar('sim/dis_mean_cp1', model.dis_mean_cp1_log, log_i)
                 writer               .add_scalar('sim/dis_mean_cp2', model.dis_mean_cp2_log, log_i)
                 # model                .log_param(writer, log_i)
