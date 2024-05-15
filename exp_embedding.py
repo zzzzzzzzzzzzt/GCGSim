@@ -1015,7 +1015,7 @@ if __name__ == "__main__":
     parser.add_argument('--gpu_id',            type = int  ,            default = 0)
     parser.add_argument('--model',             type = str,              default = 'GSC_GNN')  # GCN, GAT or other
     parser.add_argument('--recache',         action = "store_true",        help = "clean up the old adj data", default=True)
-    parser.add_argument('--pretrain_path',     type = str,              default = 'model_saved/AIDS700nef/2024-05-08_21-30-01')
+    parser.add_argument('--pretrain_path',     type = str,              default = 'model_saved/AIDS700nef/2024-05-15_15-17-39')
     args = parser.parse_args()
     # import os
     # os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
@@ -1047,8 +1047,8 @@ if __name__ == "__main__":
     # compri_distri_distribution(scores, ground_truth, graph_cdistri_dicts)
     # loss_sim_distribution(scores, ground_truth_ged, ground_truth)
     # compri_sim_distribution(ground_truth_ged, graph_embs_dicts)
-    loss_sim_distribution(scores, ground_truth_ged, ground_truth, prediction_mat)
-    # emb_hist(ground_truth_ged, graph_embs_dicts)
+    # loss_sim_distribution(scores, ground_truth_ged, ground_truth, prediction_mat)
+    emb_hist(ground_truth_ged, graph_embs_dicts)
     # compri_distri_distribution(scores, ground_truth, graph_cdistri_dicts)
     # compri_dist_l2(ground_truth_ged, graph_embs_dicts, dataset)
     # compri_dist_l2(dataset.testing_graphs, dataset.trainval_graphs, model, dataset, config, args)

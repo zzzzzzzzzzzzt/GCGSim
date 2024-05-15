@@ -50,7 +50,7 @@ GSC_GNN:
   output_comb: True
   use_ssl: True
   use_compre: False
-  use_pripre: False
+  use_pripre: True
   use_deepsets: False
   use_ff: False
   measure: 'JSD'

@@ -377,7 +377,7 @@ class DiffDecouple(nn.Module):
         self.dis_mean_cp1_log = dis_mean_cp1.mean()
         self.dis_mean_cp2_log = dis_mean_cp2.mean()
         
-        return ((dis_cp1+dis_cp2)/(dis_com+dis_cg1+dis_cg2)).mean()
+        return (1/(dis_com+dis_cg1+dis_cg2)).mean()
 
     def compute_ntn_score(self, common_feature_1, 
                         common_feature_2,
