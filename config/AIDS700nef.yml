@@ -50,7 +50,7 @@ GSC_GNN:
   output_comb: True
   use_ssl: True
   use_compre: False
-  use_pripre: True
+  use_pripre: False
   use_deepsets: False
   use_ff: False
   measure: 'JSD'
@@ -62,6 +62,7 @@ GSC_GNN:
   sim_rat: False
   noise: True
   cat_disloss: False
+  cat_NTN: False
 
 SimGNN:
   patience: -1

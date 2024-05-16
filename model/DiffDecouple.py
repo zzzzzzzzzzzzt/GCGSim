@@ -95,7 +95,10 @@ class DiffDecouple(nn.Module):
             self.NTN_list.append(TensorNetworkModule(self.config, 2*self.filters[-1]))
         elif self.config['NTN_layers'] == self.num_filter:
             for i in range(self.num_filter):
-                self.NTN_list.append(TensorNetworkModule(self.config, 2*self.filters[i]))
+                if self.config['cat_NTN']:
+                    self.NTN_list.append(TensorNetworkModule(self.config, 2*self.filters[i]))
+                else:
+                    self.NTN_list.append(TensorNetworkModule(self.config, self.filters[i]))
                 self.NTN_ged_list.append(TensorNetworkModule(self.config, self.filters[i]))
         else:
             raise NotImplementedError("Error NTN_layer number.")
@@ -234,7 +237,7 @@ class DiffDecouple(nn.Module):
             private_feature_2       = self.feature_distri(common_feature_1, common_feature_2, private_feature_1, private_feature_2, com_distri, pri_distri)
 
         # computer score and loss
-        ntn_score                   = self.compute_ntn_score(common_feature_1, common_feature_2, private_feature_1, private_feature_2)
+        ntn_score                   = self.compute_ntn_score(common_feature_1, common_feature_2, private_feature_1, private_feature_2, g1_pool, g2_pool)
         # ged_com, ged_pri            = self.compute_ged_score(common_feature_1, common_feature_2, private_feature_1, private_feature_2)
         dis_loss                    = self.compute_distance_loss(common_feature_1, common_feature_2, private_feature_1, private_feature_2, g1_pool, g2_pool, self.config['cat_disloss'])
 
@@ -379,12 +382,9 @@ class DiffDecouple(nn.Module):
         self.dis_mean_cp1_log = dis_mean_cp1.mean()
         self.dis_mean_cp2_log = dis_mean_cp2.mean()
         
-        return (1/(dis_com+dis_cg1+dis_cg2)).mean()
+        return ((dis_cp1+dis_cp2+dis_mean_cp1+dis_mean_cp2)/dis_com).mean()
 
-    def compute_ntn_score(self, common_feature_1, 
-                        common_feature_2,
-                        private_feature_1, 
-                        private_feature_2):
+    def compute_ntn_score(self, common_feature_1, common_feature_2, private_feature_1, private_feature_2, g1_pool, g2_pool):
         if self.config['NTN_layers'] != 1:
             feature_1 = [torch.cat((common_feature_1[i], private_feature_1[i]), dim=-1) for i in range(self.num_filter)]
             feature_2 = [torch.cat((common_feature_2[i], private_feature_2[i]), dim=-1) for i in range(self.num_filter)]
@@ -392,13 +392,15 @@ class DiffDecouple(nn.Module):
             feature_1 = [torch.cat((common_feature_1[-1], private_feature_1[-1]), dim=-1)]
             feature_2 = [torch.cat((common_feature_2[-1], private_feature_2[-1]), dim=-1)]
             
-        for i in range(self.config['NTN_layers']):
-            ntn_score               = (
-                                        self.NTN_list[i](feature_1[i], feature_2[i])
-                                        if i == 0
-                                        else torch.cat((ntn_score, self.NTN_list[i](feature_1[i], feature_2[i])), dim=-1)
-                                        )
-            
+        if self.config['cat_NTN']:    
+            for i in range(self.config['NTN_layers']):
+                ntn_score               = (
+                                            self.NTN_list[i](feature_1[i], feature_2[i])
+                                            if i == 0
+                                            else torch.cat((ntn_score, self.NTN_list[i](feature_1[i], feature_2[i])), dim=-1)
+                                            )
+        else:
+            ntn_score = torch.cat([self.NTN_list[i](g1_pool[i], g2_pool[i]) for i in range(self.config['NTN_layers'])], dim=-1)
         return torch.sigmoid(self.score_sim_layer(ntn_score).squeeze())
     
     def compute_ged_score(self, common_feature_1, common_feature_2, private_feature_1, private_feature_2):
