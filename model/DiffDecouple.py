@@ -13,6 +13,8 @@ from collections import OrderedDict, defaultdict
 import numpy as np
 from torchmetrics.regression import PearsonCorrCoef
 from functools import partial
+from typing import Any, Optional, Tuple
+import random
 
 class DiffDecouple(nn.Module):
     def __init__(self, config, n_feat):
@@ -542,6 +544,10 @@ class DiffDecouple(nn.Module):
     def add_noise(self, x):
         return [x[i] + torch.normal(mean=0.0, std=1e-5, size=x[i].shape).cuda() for i in range(len(x))]
     
+    def graphcom_shuffle(self, g1, g2, c1, c2):
+        batchlen = g1.shape[0]
+        ex_index = torch.LongTensor(random.sample(range(batchlen), batchlen//2))
+        
     def shape_for_corr(self, x1, x2):
         if x1.size()[0] == self.config['batch_size']:
             out_x1 = x1.T
@@ -566,4 +572,22 @@ class DiffDecouple(nn.Module):
                 writer.add_histogram('param/{}'.format(name), param, log_i)
                 writer.add_histogram('param_grad/{}'.format(name), param.grad, log_i)
 
+class GraphCommonPrediction(nn.Module):
+    def __init__(self, n_feat):
+        super(GraphCommonPrediction, self).__init__()
+        self.f = nn.Sequential(nn.Linear(n_feat, n_feat//2),
+                                nn.ReLU(),
+                                nn.Linear(n_feat//2 , 1))
+        
+    def forward(self, x, p=1.0):
+        return self.f(GradientReversalLayer.apply(x,p))
     
+class GradientReversalLayer(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx: Any, input: torch.Tensor, coeff: Optional[float] = 1.) -> torch.Tensor:
+        ctx.coeff = coeff
+        output = input * 1.0
+        return output
+    @staticmethod
+    def backward(ctx: Any, grad_output: torch.Tensor) -> Tuple[torch.Tensor, Any]:
+        return grad_output.neg() * ctx.coeff, None
