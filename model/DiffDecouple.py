@@ -47,6 +47,7 @@ class DiffDecouple(nn.Module):
         self.deepset_inner      = nn.ModuleList()  
         self.c_deepset_outer    = nn.ModuleList()
         self.p_deepset_outer    = nn.ModuleList()
+        self.comatt_MLP         = nn.ModuleList()
         self.n2gatt             = Node2GraphAttention(self.config)
         self.negative_slope     = 0.01
         if self.config['deepsets_inner_act'] == 'relu':
@@ -162,6 +163,9 @@ class DiffDecouple(nn.Module):
                                                         self.filters[i], 
                                                         num_layers=self.config['outer_mlp_layers'], 
                                                         use_bn=True))
+            
+            if self.config['com_att']:
+                self.comatt_MLP.append(nn.Sequential(nn.Linear(self.filters[i],self.filters[i]), nn.Sigmoid()))
 
     def forward(self, data):
         edge_index_1                = data['g1'].edge_index.cuda()
@@ -452,14 +456,24 @@ class DiffDecouple(nn.Module):
             att_1with_2 = self.n2gatt(x1, pool_2, batch1)
             att_2with_1 = self.n2gatt(x2, pool_1, batch2)
 
-        g1_embedding_att = torch.cat((pool_1, att_1with_2), dim=-1)
-        g2_embedding_att = torch.cat((pool_2, att_2with_1), dim=-1)
+        if self.config['com_att']:
+            c1_coef = self.comatt_MLP[filter_idx](self.n2gatt(x1, pool_2, batch1))
+            c2_coef = self.comatt_MLP[filter_idx](self.n2gatt(x2, pool_1, batch2))
 
-        common_feature_1 = self.act_outer(self.c_deepset_outer[filter_idx](g1_embedding_att))
-        common_feature_2 = self.act_outer(self.c_deepset_outer[filter_idx](g2_embedding_att))
+            common_feature_1 = c1_coef * pool_1
+            common_feature_2 = c2_coef * pool_2
 
-        private_feature_1 = self.act_outer(self.p_deepset_outer[filter_idx](g1_embedding_att))
-        private_feature_2 = self.act_outer(self.p_deepset_outer[filter_idx](g2_embedding_att))
+            private_feature_1 = pool_1 - common_feature_1
+            private_feature_2 = pool_2 - common_feature_2
+        else:
+            g1_embedding_att = torch.cat((pool_1, att_1with_2), dim=-1)
+            g2_embedding_att = torch.cat((pool_2, att_2with_1), dim=-1)
+
+            common_feature_1 = self.act_outer(self.c_deepset_outer[filter_idx](g1_embedding_att))
+            common_feature_2 = self.act_outer(self.c_deepset_outer[filter_idx](g2_embedding_att))
+
+            private_feature_1 = self.act_outer(self.p_deepset_outer[filter_idx](g1_embedding_att))
+            private_feature_2 = self.act_outer(self.p_deepset_outer[filter_idx](g2_embedding_att))
 
         out_1, out_2 = None, None
         if out:

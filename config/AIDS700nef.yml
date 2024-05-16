@@ -62,7 +62,8 @@ GSC_GNN:
   sim_rat: False
   noise: True
   cat_disloss: False
-  cat_NTN: False
+  cat_NTN: True
+  com_att: True
 
 SimGNN:
   patience: -1
