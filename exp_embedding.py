@@ -1015,7 +1015,7 @@ if __name__ == "__main__":
     parser.add_argument('--gpu_id',            type = int  ,            default = 0)
     parser.add_argument('--model',             type = str,              default = 'GSC_GNN')  # GCN, GAT or other
     parser.add_argument('--recache',         action = "store_true",        help = "clean up the old adj data", default=True)
-    parser.add_argument('--pretrain_path',     type = str,              default = 'model_saved/AIDS700nef/2024-05-15_15-17-39')
+    parser.add_argument('--pretrain_path',     type = str,              default = 'model_saved/AIDS700nef/2024-05-16_21-55-43')
     args = parser.parse_args()
     # import os
     # os.environ['CUDA_LAUNCH_BLOCKING'] = '1'

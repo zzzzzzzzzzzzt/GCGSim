@@ -64,6 +64,8 @@ GSC_GNN:
   cat_disloss: False
   cat_NTN: True
   com_att: True
+  alpha_weight: 1.0
+  beta_weight: 1.0
 
 SimGNN:
   patience: -1

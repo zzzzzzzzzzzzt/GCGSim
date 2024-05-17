@@ -365,8 +365,9 @@ class DiffDecouple(nn.Module):
             private_feature_2 = self.add_noise(private_feature_2)
 
         dis_com =  torch.cat([f(torch.abs(F.cosine_similarity(common_feature_1[i], common_feature_2[i], dim=-1))) for i in range(len_list)], dim=0)
-        dis_cp1 =  torch.cat([f(torch.abs(F.cosine_similarity(common_feature_1[i].detach(), private_feature_1[i], dim=-1))) for i in range(len_list)], dim=0)
-        dis_cp2 =  torch.cat([f(torch.abs(F.cosine_similarity(common_feature_2[i].detach(), private_feature_2[i], dim=-1))) for i in range(len_list)], dim=0)
+        dis_pri =  torch.cat([f(torch.abs(F.cosine_similarity(private_feature_1[i], private_feature_2[i], dim=-1))) for i in range(len_list)], dim=0)
+        dis_cp1 =  torch.cat([f(torch.abs(F.cosine_similarity(common_feature_1[i], private_feature_1[i], dim=-1))) for i in range(len_list)], dim=0)
+        dis_cp2 =  torch.cat([f(torch.abs(F.cosine_similarity(common_feature_2[i], private_feature_2[i], dim=-1))) for i in range(len_list)], dim=0)
         dis_cg1 =  torch.cat([f(torch.abs(F.cosine_similarity(common_feature_1[i], g1_pool[i].detach(), dim=-1))) for i in range(len_list)], dim=0)
         dis_cg2 =  torch.cat([f(torch.abs(F.cosine_similarity(common_feature_2[i], g2_pool[i].detach(), dim=-1))) for i in range(len_list)], dim=0)
 
@@ -379,6 +380,7 @@ class DiffDecouple(nn.Module):
         dis_mean_cp2 =  torch.cat([f(torch.abs(F.cosine_similarity(center_common_2[i], center_private_2[i], dim=-1))) for i in range(len_list)], dim=0)
 
         self.sim_com_log = dis_com.mean()
+        self.dis_pri_log = dis_pri.mean()
         self.sim_pri1_log = dis_cp1.mean()
         self.sim_pri2_log = dis_cp2.mean()
         self.dis_cg1_log = dis_cg1.mean()
@@ -386,7 +388,7 @@ class DiffDecouple(nn.Module):
         self.dis_mean_cp1_log = dis_mean_cp1.mean()
         self.dis_mean_cp2_log = dis_mean_cp2.mean()
         
-        return ((dis_cp1+dis_cp2+dis_mean_cp1+dis_mean_cp2)/dis_com).mean()
+        return self.config['alpha_weight']*dis_pri.mean() - self.config['beta_weight']*dis_com.mean()
 
     def compute_ntn_score(self, common_feature_1, common_feature_2, private_feature_1, private_feature_2, g1_pool, g2_pool):
         if self.config['NTN_layers'] != 1:
