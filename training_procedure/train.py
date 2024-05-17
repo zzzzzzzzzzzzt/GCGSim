@@ -31,11 +31,11 @@ def train(self, graph_batch, model, loss_func, optimizer, target, dataset = None
             loss += loss_cl
         if use_compre:
             com_lable = torch.abs(torch.normal(mean=0.0, std=0.1, size=(reg_dict['ged_com'].shape[0],))).cuda()
-            loss_compre = loss_func(reg_dict['ged_com'], com_lable)
+            loss_compre = config['lambda_weight']*loss_func(reg_dict['ged_com'], com_lable)
             loss += loss_compre
         if use_pripre:
             pri_lable = target['target_scaler']
-            loss_pripre = loss_func(reg_dict['ged_pri'], pri_lable)
+            loss_pripre = config['rho_weight']*loss_func(reg_dict['ged_pri'], pri_lable)
             loss += loss_pripre
             
         loss.backward()
