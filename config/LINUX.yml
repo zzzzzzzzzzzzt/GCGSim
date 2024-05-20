@@ -27,7 +27,8 @@ GSC_GNN:
   scale: 1
   show_last: False
 
-  gnn_encoder: "GIN"      
+  gnn_encoder: "GIN"
+  graph_encoder: 'deepset'      
   multi_contrast: False
   gnn_filters: [64, 64, 32, 16]
   dropout: 0.
@@ -51,11 +52,13 @@ GSC_GNN:
   val_size: 50000
   
   use_sim: True
-  NTN_layers: 1
+  NTN_layers: 4
   tensor_neurons: 16
   output_comb: True  
 
   use_ssl: True
+  use_compre: False
+  use_pripre: False
   use_deepsets: False
   use_ff: False
   sep: False
@@ -63,3 +66,8 @@ GSC_GNN:
 
   clip_grad: True
   num_works: 10
+  board_log: True
+  reconstruction: False
+  sim_rat: True
+  noise: True
+  cat_disloss: False
