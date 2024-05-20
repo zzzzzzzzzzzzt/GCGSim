@@ -48,8 +48,8 @@ GSC_GNN:
   NTN_layers: 4
   tensor_neurons: 16
   output_comb: True
-  use_ssl: False
-  use_compre: True
+  use_ssl: True
+  use_compre: False
   use_pripre: False
   use_deepsets: False
   use_ff: False
@@ -59,11 +59,11 @@ GSC_GNN:
   sep: False
   board_log: True
   reconstruction: False
-  sim_rat: False
+  sim_rat: True
   noise: True
   cat_disloss: False
   cat_NTN: True
-  com_att: True
+  com_att: False
   alpha_weight: 1.0
   beta_weight: 1.0
   lambda_weight: 1.0

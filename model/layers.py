@@ -117,13 +117,17 @@ class GlobalContextAware(AttentionModule2):
 
 
 class Node2GraphAttention(torch.nn.Module):
-    def __init__(self, config):
+    def __init__(self, config, f):
         super(Node2GraphAttention, self).__init__()
         self.config = config
+        self.f = f
 
     def forward(self, n_embedding, g_embedding, n_batch, size=None):
         size = n_batch[-1].item() + 1 if size is None else size
-        coefs = torch.sigmoid((n_embedding * g_embedding[n_batch]).sum(dim=1))
+        if self.f == 'sigmoid':
+            coefs = torch.sigmoid((n_embedding * g_embedding[n_batch]).sum(dim=1))
+        elif self.f == 'cosine_similarity':
+            coefs = F.cosine_similarity(n_embedding, g_embedding[n_batch])
         weighted = coefs.unsqueeze(-1) * n_embedding
 
         return scatter_add(weighted, n_batch, dim=0, dim_size=size)
