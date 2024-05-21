@@ -64,7 +64,7 @@ GSC_GNN:
   sep: False
   measure: 'JSD'
 
-  clip_grad: True
+  clip_grad: False
   num_works: 10
   board_log: True
   reconstruction: False

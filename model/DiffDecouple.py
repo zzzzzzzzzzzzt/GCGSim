@@ -563,7 +563,7 @@ class DiffDecouple(nn.Module):
         return out_x1, out_x2
     
     def dense_batch(self, n, b):
-        return [to_dense_batch(n[i], b) for i in self.num_filter]
+        return [to_dense_batch(n[i], b) for i in range(self.num_filter)]
 
     def log_param(self, writer, log_i):
         for name, param in self.named_parameters():
