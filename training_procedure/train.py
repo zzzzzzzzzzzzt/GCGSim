@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch_geometric.transforms as T
 from torch_geometric.nn.conv.gcn_conv import gcn_norm
 import torch
-def train(self, graph_batch, model, loss_func, optimizer, target, dataset = None):
+def train(self, graph_batch, model, loss_func, optimizer, target, p, dataset = None):
     model.train(True)
 
     
@@ -28,7 +28,7 @@ def train(self, graph_batch, model, loss_func, optimizer, target, dataset = None
 
         if use_ssl:
             loss_cl = reg_dict['reg_loss']
-            loss += loss_cl
+            loss += p*config['alpha_weight']*loss_cl
         if use_compre:
             com_lable = torch.abs(torch.normal(mean=0.0, std=0.1, size=(reg_dict['ged_com'].shape[0],))).cuda()
             loss_compre = config['lambda_weight']*loss_func(reg_dict['ged_com'], com_lable)

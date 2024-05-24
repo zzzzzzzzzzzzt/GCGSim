@@ -60,9 +60,16 @@ def main(args, config, logger: Logger, run_id: int, dataset: DatasetLocal):
         for batch_pair in batches:
             data                     = dataset.transform_batch(batch_pair, config)
             target                   = {'target': data["target"].cuda(), 'target_scaler': data["target_scaler"].cuda()}
+            main_index               = main_index + batch_pair[0].num_graphs 
+            if epoch < config['schedule_start'] * config['epochs']:
+                p                    = 0.0
+            else:
+                p                    = float(main_index + epoch * dataset.num_train_graphs) / config['epochs'] / dataset.num_train_graphs - config['schedule_start']
+            if config['schedule_start'] == -1:
+                p                    = 1.0
+            p = 2. / (1. + np.exp(-10 * p)) - 1
             model, loss, loss_cl, loss_compre, loss_pripre \
-                                     = T.train(data, model, loss_func, optimizer, target)   
-            main_index               = main_index + batch_pair[0].num_graphs               
+                                     = T.train(data, model, loss_func, optimizer, target, p)                 
             loss_sum                 = loss_sum + loss
             losscl_sum               = losscl_sum + loss_cl
             losscompre_sum           = losscompre_sum + loss_compre
@@ -119,7 +126,7 @@ def main(args, config, logger: Logger, run_id: int, dataset: DatasetLocal):
 
 
         if epoch != config['epochs']-1:
-            postfix_str = "<Epoch %d> [Train Loss] %.5f [CL Loss] %.5f [Compre Loss] %.5f [Pripre Loss] %.5f"% (epoch, loss, loss_cl, loss_compre, loss_pripre)
+            postfix_str = "<Epoch %d> [Train Loss] %.5f [CL Loss] %.5f [Compre Loss] %.5f [Pripre Loss] %.5f [P schedule] %.5f"% (epoch, loss, loss_cl, loss_compre, loss_pripre, p)
             # pbar.set_postfix_str(postfix_str)
         elif epoch == config['epochs'] and config.get('show_last', False): 
             mse, rho, tau, prec_at_10, prec_at_20 = T.evaluation(dataset.testing_graphs, dataset.training_graphs, model, loss_func, dataset)

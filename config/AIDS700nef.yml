@@ -12,7 +12,7 @@ GSC_GNN:
   save_best_all: True
   multilabel: False
   patience: -1
-  seed: -1
+  seed: 1234
   lr: 0.001
   weight_decay: 0.0
   lr_scheduler: False
@@ -64,10 +64,11 @@ GSC_GNN:
   cat_disloss: False
   cat_NTN: True
   com_att: False
-  alpha_weight: 1.0
+  alpha_weight: 1.2
   beta_weight: 1.0
   lambda_weight: 1.0
   rho_weight: 1.0
+  schedule_start: -1
 
 SimGNN:
   patience: -1
