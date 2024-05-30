@@ -70,6 +70,7 @@ GSC_GNN:
   lambda_weight: 1.0
   rho_weight: 1.0
   schedule_start: -1
+  detach: False
 
 SimGNN:
   patience: -1

@@ -28,7 +28,7 @@ def train(self, graph_batch, model, loss_func, optimizer, target, p, dataset = N
 
         if use_ssl:
             loss_cl = reg_dict['reg_loss']
-            loss += p*config['alpha_weight']*loss_cl
+            loss += p*loss_cl
         if use_compre:
             com_lable = torch.abs(torch.normal(mean=0.0, std=0.1, size=(reg_dict['ged_com'].shape[0],))).cuda()
             loss_compre = config['lambda_weight']*loss_func(reg_dict['ged_com'], com_lable)
