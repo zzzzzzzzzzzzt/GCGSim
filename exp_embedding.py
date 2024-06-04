@@ -38,11 +38,15 @@ def evaluate(testing_graphs, training_graphs, model, dataset: DatasetLocal, conf
     ground_truth_nged              = np.empty((len(testing_graphs), len(training_graphs)))
     prediction_mat                 = np.empty((len(testing_graphs), len(training_graphs)))
     graph_embs_dicts               = dict()
+    node_embs_dicts                = dict()
     graph_cdistri_dicts            = list()
     for i_filter in range(model.num_filter):
         graph_embs_dicts[i_filter] = dict()
         for n in ['com_1', 'com_2', 'pri_1', 'pri_2']:
-             graph_embs_dicts[i_filter][n] = list()
+            graph_embs_dicts[i_filter][n] = list()
+        node_embs_dicts[i_filter]  = dict()
+        for n in ['g1', 'g2']:
+            node_embs_dicts[i_filter][n] = list()
 
     num_test_pairs                 = len(testing_graphs) * len(training_graphs)
     t                              = tqdm(total=num_test_pairs)
@@ -76,9 +80,11 @@ def evaluate(testing_graphs, training_graphs, model, dataset: DatasetLocal, conf
                 graph_embs_dicts[i_filter]['com_2'].append(model.com2_list[i_filter].cpu().detach().numpy())             
                 graph_embs_dicts[i_filter]['pri_1'].append(model.pri1_list[i_filter].cpu().detach().numpy())                  
                 graph_embs_dicts[i_filter]['pri_2'].append(model.pri2_list[i_filter].cpu().detach().numpy())
+                node_embs_dicts[i_filter]['g1'].append((model.nod1_list[i_filter][0].cpu().detach().numpy(), model.nod1_list[i_filter][1].cpu().detach().numpy()))
+                node_embs_dicts[i_filter]['g2'].append((model.nod2_list[i_filter][0].cpu().detach().numpy(), model.nod2_list[i_filter][1].cpu().detach().numpy()))
         t.update(len(training_graphs))
 
-    return scores, ground_truth, ground_truth_ged, ground_truth_nged, prediction_mat, graph_embs_dicts, graph_cdistri_dicts
+    return scores, ground_truth, ground_truth_ged, ground_truth_nged, prediction_mat, graph_embs_dicts, node_embs_dicts, graph_cdistri_dicts
 
 def loss_sim_distribution(scores, ground_truth_ged, ground_truth, prediction_mat):
     ged_max = int(np.max(ground_truth_ged))
@@ -449,6 +455,152 @@ def compri_sim_distribution(ground_truth_ged, graph_embs_dicts):
         save_fig(plt, dir_, img_name)
         plt.close()
 
+def emb_hist_heat(prediction_mat, graph_embs_dicts, node_embs_dicts):
+    sort_id_mat_pre = np.argsort(prediction_mat,  kind = 'mergesort')[:, ::-1]
+    gidraw = [0, 1, 2, 3, 4, 5, 6, 7, 8 ,9 , 10 ,11,22, 21, 76,64]
+    rankcol = [10,]  
+    filter_list = [0,1,2,3]
+
+    for i_filter in filter_list:
+        for test_id in gidraw:
+            for traval_id in sort_id_mat_pre[test_id][rankcol]:
+                node1_emb = node_embs_dicts[i_filter]['g1'][test_id][0][traval_id][node_embs_dicts[i_filter]['g1'][test_id][1][traval_id]]
+                node2_emb = node_embs_dicts[i_filter]['g2'][test_id][0][traval_id][node_embs_dicts[i_filter]['g2'][test_id][1][traval_id]]
+                cp1_emb = np.array([graph_embs_dicts[i_filter]['com_1'][test_id][traval_id], 
+                                    graph_embs_dicts[i_filter]['pri_1'][test_id][traval_id]])
+                cp2_emb = np.array([graph_embs_dicts[i_filter]['com_2'][test_id][traval_id], 
+                                    graph_embs_dicts[i_filter]['pri_2'][test_id][traval_id]])
+                n1n2_cos_matrix = cosine_similarity(node1_emb, node2_emb)
+                n1g2_cos_matrix = cosine_similarity(node1_emb, cp2_emb)
+                g1n2_cos_matrix = cosine_similarity(cp1_emb, node2_emb)
+
+                fig = plt.figure(figsize=(6, 6))
+                # Add a gridspec with two rows and two columns and a ratio of 1 to 4 between
+                # the size of the marginal Axes and the main Axes in both directions.
+                # Also adjust the subplot parameters for a square plot.
+                gs = fig.add_gridspec(2, 2,  width_ratios=(len(node1_emb), 2), height_ratios=(2, len(node2_emb)),
+                                      left=0.1, right=0.9, bottom=0.1, top=0.9, wspace=0.05, hspace=0.05)
+                # Create the Axes.
+                n1n2_ax = fig.add_subplot(gs[1, 0])
+                n1g2_ax = fig.add_subplot(gs[1, 1], sharey=n1n2_ax)
+                g1n2_ax = fig.add_subplot(gs[0, 0], sharex=n1n2_ax)
+                
+                for ax in [n1n2_ax, n1g2_ax, g1n2_ax]:
+                    ax.label_outer()
+                heatmap(n1g2_cos_matrix, None, ['C2', 'P2'], ax=n1g2_ax, cmap="YlGn")
+                heatmap(g1n2_cos_matrix, ['C1', 'P1'], None, ax=g1n2_ax, cmap="YlGn")
+                heatmap(n1n2_cos_matrix, ["G%i"% i for i in range(len(node1_emb))], ["g%i"% i for i in range(len(node2_emb))], ax=n1n2_ax, cmap="YlGn",)
+                # fig.tight_layout()
+                save_fig(plt, 'img', 'c')
+                plt.close()
+
+def heatmap(data, row_labels, col_labels, ax=None,
+            cbar_kw=None, cbarlabel="", **kwargs):
+    """
+    Create a heatmap from a numpy array and two lists of labels.
+
+    Parameters
+    ----------
+    data
+        A 2D numpy array of shape (M, N).
+    row_labels
+        A list or array of length M with the labels for the rows.
+    col_labels
+        A list or array of length N with the labels for the columns.
+    ax
+        A `matplotlib.axes.Axes` instance to which the heatmap is plotted.  If
+        not provided, use current Axes or create a new one.  Optional.
+    cbar_kw
+        A dictionary with arguments to `matplotlib.Figure.colorbar`.  Optional.
+    cbarlabel
+        The label for the colorbar.  Optional.
+    **kwargs
+        All other arguments are forwarded to `imshow`.
+    """
+
+    if ax is None:
+        ax = plt.gca()
+
+    if cbar_kw is None:
+        cbar_kw = {}
+
+    # Plot the heatmap
+    im = ax.imshow(data, **kwargs)
+    if row_labels:
+        ax.set_yticks(np.arange(len(row_labels)))
+        ax.set_yticklabels(row_labels)
+    else:
+        ax.set_yticks([])
+    if col_labels:
+        ax.set_xticks(np.arange(len(col_labels)))
+        ax.set_xticklabels(col_labels)
+    else:
+        ax.set_xticks([])
+        
+    ax.spines[:].set_visible(False)
+    # ax.set(aspect=1)
+    annotate_heatmap(im)
+
+    return im
+
+
+def annotate_heatmap(im, data=None, valfmt="{x:.2f}",
+                     textcolors=("black", "white"),
+                     threshold=None, **textkw):
+    """
+    A function to annotate a heatmap.
+
+    Parameters
+    ----------
+    im
+        The AxesImage to be labeled.
+    data
+        Data used to annotate.  If None, the image's data is used.  Optional.
+    valfmt
+        The format of the annotations inside the heatmap.  This should either
+        use the string format method, e.g. "$ {x:.2f}", or be a
+        `matplotlib.ticker.Formatter`.  Optional.
+    textcolors
+        A pair of colors.  The first is used for values below a threshold,
+        the second for those above.  Optional.
+    threshold
+        Value in data units according to which the colors from textcolors are
+        applied.  If None (the default) uses the middle of the colormap as
+        separation.  Optional.
+    **kwargs
+        All other arguments are forwarded to each call to `text` used to create
+        the text labels.
+    """
+
+    if not isinstance(data, (list, np.ndarray)):
+        data = im.get_array()
+
+    # Normalize the threshold to the images color range.
+    if threshold is not None:
+        threshold = im.norm(threshold)
+    else:
+        threshold = im.norm(data.max())/2.
+
+    # Set default alignment to center, but allow it to be
+    # overwritten by textkw.
+    kw = dict(horizontalalignment="center",
+              verticalalignment="center")
+    kw.update(textkw)
+
+    # Get the formatter in case a string is supplied
+    if isinstance(valfmt, str):
+        valfmt = matplotlib.ticker.StrMethodFormatter(valfmt)
+
+    # Loop over the data and create a `Text` for each "pixel".
+    # Change the text's color depending on the data.
+    texts = []
+    for i in range(data.shape[0]):
+        for j in range(data.shape[1]):
+            kw.update(color=textcolors[int(im.norm(data[i, j]) > threshold)])
+            text = im.axes.text(j, i, valfmt(data[i, j], None), **kw)
+            texts.append(text)
+
+    return texts
 def get_true_result(all_graphs, testing_graphs, trainval_graphs, sim_or_dist = 'dist'):
     ged_matrix                                  = trainval_graphs.ged
     nged_matrix                                 = trainval_graphs.norm_ged
@@ -1041,6 +1193,7 @@ if __name__ == "__main__":
     ground_truth_nged,             \
     prediction_mat,                \
     graph_embs_dicts,              \
+    node_embs_dicts,               \
     graph_cdistri_dicts            = evaluate(dataset.testing_graphs, dataset.trainval_graphs, model, dataset, config)
 
     # compri_sim_distribution(dataset.testing_graphs, dataset.trainval_graphs, model, dataset, config, args)

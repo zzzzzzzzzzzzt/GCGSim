@@ -15,6 +15,7 @@ from torchmetrics.regression import PearsonCorrCoef
 from functools import partial
 from typing import Any, Optional, Tuple
 import random
+from torch_geometric.utils import to_dense_batch
 
 class DiffDecouple(nn.Module):
     def __init__(self, config, n_feat):
@@ -186,7 +187,8 @@ class DiffDecouple(nn.Module):
         conv_source_1               = torch.clone(features_1)
         conv_source_2               = torch.clone(features_2)
         
-        
+        node_feature_1              = list()
+        node_feature_2              = list()
         common_feature_1            = list()
         common_feature_2            = list()
         private_feature_1           = list()
@@ -218,6 +220,8 @@ class DiffDecouple(nn.Module):
             _g1_pool,           \
             _g2_pool            = self.deepset_output(conv_source_1, conv_source_2, batch_1, batch_2, i, True)
 
+            node_feature_1      .append(conv_source_1)
+            node_feature_2      .append(conv_source_2)
             common_feature_1    .append(_common_feature_1)
             common_feature_2    .append(_common_feature_2)
             private_feature_1   .append(_private_feature_1)
@@ -230,7 +234,9 @@ class DiffDecouple(nn.Module):
             self.com2_list          = common_feature_2
             self.pri1_list          = private_feature_1
             self.pri2_list          = private_feature_2
-            
+            self.nod1_list          = self.dense_batch(node_feature_1, batch_1)
+            self.nod2_list          = self.dense_batch(node_feature_2, batch_2)
+
         ged_com, ged_pri            = self.compute_ged_score(common_feature_1, common_feature_2, private_feature_1, private_feature_2)
         if self.config['sim_rat']:
             com_Di, pri_Di          = self.get_sim_rat(g1_pool, g2_pool)
@@ -588,6 +594,9 @@ class DiffDecouple(nn.Module):
             
         return out_x1, out_x2
     
+    def dense_batch(self, n, b):
+        return [to_dense_batch(n[i], b) for i in range(self.num_filter)]
+
     def log_param(self, writer, log_i):
         for name, param in self.named_parameters():
             if 'gnn_list' in name:
