@@ -64,8 +64,8 @@ GSC_GNN:
   cat_disloss: False
   cat_NTN: True
   com_att: False
-  alpha_weight: 2.4
-  beta_weight: 2.4
+  alpha_weight: 4.0
+  beta_weight: 4.0
   mu_weight: 2.4
   lambda_weight: 1.0
   rho_weight: 1.0
