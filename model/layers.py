@@ -4,6 +4,7 @@ import torch.nn as nn
 from torch_geometric.nn.glob import global_mean_pool, global_add_pool
 import torch.nn.functional as F
 from torch_scatter import scatter_mean, scatter_add
+from torch_geometric.nn import GCNConv, GINConv, Sequential
 
 class MLP(nn.Module):
     def __init__(self, nfeat, nhid, nclass, num_layers = 2 ,use_bn=True):
@@ -257,3 +258,23 @@ class FF(nn.Module):
 
     def forward(self, x):
         return self.block(x) + self.linear_shortcut(x)
+
+class FFNGIN(nn.Module):
+    # * graph_level_type = ['gap','gmp','gm']
+    def __init__(self, in_channels, gnn_type, pGin=False):
+        super(FFNGIN, self).__init__()
+        self.pGin = pGin
+        if gnn_type == 'gin':
+            self.nns = nn.Linear(in_channels, in_channels)
+            self.gnn_layers = nn.Sequential(GINConv(self.nns, eps=True), nn.LayerNorm(in_channels), nn.ReLU(inplace=True))
+        elif gnn_type == 'gcn':
+            self.gnn_layers = nn.Sequential(GCNConv(in_channels, in_channels), nn.LayerNorm(in_channels), nn.ReLU(inplace=True))
+        self.ffn = nn.Sequential(nn.Linear(in_channels, in_channels), nn.LayerNorm(in_channels))
+    
+    def forward(self, x, edge_index, batch):
+        if self.pGin == False:
+            x = x + self.gnn_layers(x, edge_index, batch)
+            x = self.ffn(x, batch)
+        else:
+            x = self.gnn_layers(x, edge_index, batch)
+        return x

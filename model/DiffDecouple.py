@@ -7,7 +7,7 @@ import torch.nn as nn
 from torch_geometric.nn import GCNConv, GINConv, GATConv
 import torch.nn.functional as F   
 from torch_geometric.nn.glob import global_add_pool, global_mean_pool
-from model.layers import AttentionModule, MLPLayers, TensorNetworkModule, FF, GlobalContextAware, Node2GraphAttention, MLP
+from model.layers import AttentionModule, MLPLayers, TensorNetworkModule, FF, GlobalContextAware, Node2GraphAttention, MLP, FFNGIN
 from utils.gan_losses import get_negative_expectation, get_positive_expectation
 from collections import OrderedDict, defaultdict
 import numpy as np
@@ -90,6 +90,10 @@ class DiffDecouple(nn.Module):
                 torch.nn.Linear(self.filters[i+1], self.filters[i+1]),
                 torch.nn.BatchNorm1d(self.filters[i+1]),
             ), eps=True))
+        elif self.gnn_enc           == 'FFNGIN':
+            self.embedding = nn.Linear(self.n_feat, self.filters[0])
+            for i in range(self.num_filter-1):
+                self.gnn_list.append(FFNGIN(self.filters[i], 'gin'))
         else:
             raise NotImplementedError("Unknown GNN-Operator.")
 
@@ -196,6 +200,9 @@ class DiffDecouple(nn.Module):
         g1_pool                     = list()
         g2_pool                     = list()
 
+        if self.gnn_enc             == 'FFNGIN':
+            edge_index_1            = self.embedding(edge_index_1)
+            edge_index_2            = self.embedding(edge_index_2)
         for i in range(self.num_filter):
             if self.config.get('convolpass', True):
                 conv_source_1       = self.convolutional_pass(self.gnn_list[i], edge_index_1, conv_source_1)
