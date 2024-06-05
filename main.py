@@ -48,7 +48,7 @@ def main(args, config, logger: Logger, run_id: int, dataset: DatasetLocal, date,
         log_i                        = 0
     for epoch in pbar:
         if not custom:
-            batches                  = dataset.create_batches(config)   # 128对 graph-pair
+            batches                  = dataset.create_batches_all(config)   # 128对 graph-pair
 
         else:
             batch_feature_1, batch_adj_1, batch_mask_1, batch_feature_2, batch_adj_2, batch_mask_2, batch_ged = dataset.custom_dataset.get_training_batch()
