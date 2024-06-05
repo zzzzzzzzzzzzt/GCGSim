@@ -13,7 +13,7 @@ from training_procedure import Trainer
 from DataHelper.DatasetLocal import DatasetLocal
 from model.GSC import GSC
 
-def main(args, config, logger: Logger, run_id: int, dataset: DatasetLocal):
+def main(args, config, logger: Logger, run_id: int, dataset: DatasetLocal, date, train_name,):
     T                                = Trainer(config=config, args= args, logger= logger)
 
     model, optimizer, loss_func      = T.init(dataset)   # model of current split
@@ -40,8 +40,8 @@ def main(args, config, logger: Logger, run_id: int, dataset: DatasetLocal):
     best_val_metric                  = [best_val_mse, best_val_rho, best_val_tau, best_val_p10, best_val_p20]
     b_epoch                          = 0
     if config['save_best']:
-        PATH_MODEL                   = os.path.join(os.path.join(os.getcwd(),'model_saved'), args.dataset, datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))    
-
+        # PATH_MODEL                   = os.path.join(os.path.join(os.getcwd(),'model_saved'), args.dataset, datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))    
+        PATH_MODEL                   = os.path.join(os.getcwd(), 'model_saved', args.dataset, date, '{}_{}'.format(train_name, run_id) )
     if config['board_log']: 
         from tensorboardX import SummaryWriter
         writer                       = SummaryWriter(log_dir=PATH_MODEL)
@@ -233,6 +233,7 @@ if __name__ == "__main__":
     parser.add_argument('--save_model',        type = bool,           default = False)
     parser.add_argument('--run_pretrain',    action ='store_true',    default = False)
     parser.add_argument('--pretrain_path',     type = str,            default = 'model_saved/LINUX/2022-03-20_03-01-57')
+    parser.add_argument('--train_name',        type = str,            default = 'None')
     args = parser.parse_args()
     torch.cuda.set_device(args.gpu_id)
 
@@ -281,8 +282,9 @@ if __name__ == "__main__":
             logger.add_line()
             # set_random_seed(seeds[run_id])
             # logger.log ("Seed set to %d." % seeds[run_id])
-
-            model, best_metric_epoch ,report_mse_test, report_rho_test,report_tau_test,report_prec_at_10_test,report_prec_at_20_test, loss,PATH_MODEL, best_val_results = main(args, config, logger, run_id, dataset)
+            date = datetime.datetime.now().strftime('%Y-%m-%d')
+            model, best_metric_epoch ,report_mse_test, report_rho_test,report_tau_test,report_prec_at_10_test,report_prec_at_20_test, loss,PATH_MODEL, best_val_results \
+                = main(args, config, logger, run_id, dataset, date, args.train_name)
 
             logger.add_line()
             print_evaluation(report_mse_test,report_rho_test,report_tau_test,report_prec_at_10_test,report_prec_at_20_test)
