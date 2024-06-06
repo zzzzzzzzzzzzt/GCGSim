@@ -80,7 +80,7 @@ class DiffDecouple(nn.Module):
                 torch.nn.Linear(self.n_feat, self.filters[0]),
                 torch.nn.ReLU(),
                 torch.nn.Linear(self.filters[0], self.filters[0]),
-                # torch.nn.BatchNorm1d(self.filters[0]),
+                torch.nn.LayerNorm(self.filters[0]),
             ),eps=True))
 
             for i in range(self.num_filter-1):
@@ -88,7 +88,7 @@ class DiffDecouple(nn.Module):
                 torch.nn.Linear(self.filters[i],self.filters[i+1]),
                 torch.nn.ReLU(),
                 torch.nn.Linear(self.filters[i+1], self.filters[i+1]),
-                # torch.nn.BatchNorm1d(self.filters[i+1]),
+                torch.nn.LayerNorm(self.filters[i+1]),
             ), eps=True))
         else:
             raise NotImplementedError("Unknown GNN-Operator.")
