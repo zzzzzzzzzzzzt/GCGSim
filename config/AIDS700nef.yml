@@ -25,10 +25,10 @@ GSC_GNN:
   feat_norm: False
   synth: False
   scale: 1
-  gnn_encoder: 'GIN'
+  gnn_encoder: 'FFNGIN'
   graph_encoder: 'deepset'
   multi_contrast: False
-  gnn_filters: [64, 64, 32, 16]
+  gnn_filters: [64, 64, 64, 64]
   dropout: 0.0
   deepsets: True
   use_bn: False

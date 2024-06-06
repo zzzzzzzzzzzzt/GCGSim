@@ -3,8 +3,13 @@ import torch
 import torch.nn as nn
 from torch_geometric.nn.glob import global_mean_pool, global_add_pool
 import torch.nn.functional as F
-from torch_scatter import scatter_mean, scatter_add
+from torch_scatter import scatter_mean, scatter_add, scatter
 from torch_geometric.nn import GCNConv, GINConv, Sequential
+from torch_geometric.nn.inits import ones, zeros
+from torch.nn import Parameter, LayerNorm
+from torch_geometric.utils import degree
+from torch_geometric.typing import OptTensor
+from torch import Tensor
 
 class MLP(nn.Module):
     def __init__(self, nfeat, nhid, nclass, num_layers = 2 ,use_bn=True):
@@ -259,6 +264,82 @@ class FF(nn.Module):
     def forward(self, x):
         return self.block(x) + self.linear_shortcut(x)
 
+class LayerNorm(torch.nn.Module):
+    r"""Applies layer normalization over each individual example in a batch
+    of node features as described in the `"Layer Normalization"
+    <https://arxiv.org/abs/1607.06450>`_ paper
+
+    .. math::
+        \mathbf{x}^{\prime}_i = \frac{\mathbf{x} -
+        \textrm{E}[\mathbf{x}]}{\sqrt{\textrm{Var}[\mathbf{x}] + \epsilon}}
+        \odot \gamma + \beta
+
+    The mean and standard-deviation are calculated across all nodes and all
+    node channels separately for each object in a mini-batch.
+
+    Args:
+        in_channels (int): Size of each input sample.
+        eps (float, optional): A value added to the denominator for numerical
+            stability. (default: :obj:`1e-5`)
+        affine (bool, optional): If set to :obj:`True`, this module has
+            learnable affine parameters :math:`\gamma` and :math:`\beta`.
+            (default: :obj:`True`)
+    """
+
+    def __init__(self, in_channels, eps=1e-5, affine=True):
+        super().__init__()
+        # affine = False
+        self.in_channels = in_channels
+        self.eps = eps
+
+        if affine:
+            self.weight = Parameter(torch.Tensor([in_channels]))
+            self.bias = Parameter(torch.Tensor([in_channels]))
+        else:
+            self.register_parameter('weight', None)
+            self.register_parameter('bias', None)
+
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        ones(self.weight)
+        zeros(self.bias)
+        # torch.nn.init.constant_(self.weight,1)
+        # torch.nn.init.constant_(self.bias,4)
+        # constant(self.weight,1)
+        # constant(self.bias,2)
+
+    def forward(self, x: Tensor, batch: OptTensor = None) -> Tensor:
+        """"""
+        if batch is None:
+            x = x - x.mean()
+            out = x / (x.std(unbiased=False) + self.eps)
+
+        else:
+            batch_size = int(batch.max()) + 1
+
+            norm = degree(batch, batch_size, dtype=x.dtype).clamp_(min=1)
+            norm = norm.mul_(x.size(-1)).view(-1, 1)
+
+            mean = scatter(x, batch, dim=0, dim_size=batch_size,
+                           reduce='add').sum(dim=-1, keepdim=True) / norm
+
+            x = x - mean.index_select(0, batch)
+
+            var = scatter(x * x, batch, dim=0, dim_size=batch_size,
+                          reduce='add').sum(dim=-1, keepdim=True)
+            var = var / norm
+
+            out = x / (var + self.eps).sqrt().index_select(0, batch)
+
+        if self.weight is not None and self.bias is not None:
+            out = out * self.weight + self.bias
+
+        return out
+
+    def __repr__(self):
+        return f'{self.__class__.__name__}({self.in_channels})'
+    
 class FFNGIN(nn.Module):
     # * graph_level_type = ['gap','gmp','gm']
     def __init__(self, in_channels, gnn_type, pGin=False):
@@ -266,11 +347,25 @@ class FFNGIN(nn.Module):
         self.pGin = pGin
         if gnn_type == 'gin':
             self.nns = nn.Linear(in_channels, in_channels)
-            self.gnn_layers = nn.Sequential(GINConv(self.nns, eps=True), nn.LayerNorm(in_channels), nn.ReLU(inplace=True))
+            self.gnn_layers = Sequential('x,edge_index,batch', [
+                (GINConv(self.nns, eps=True), 'x,edge_index -> x'),
+                (LayerNorm(in_channels), 'x,batch -> x'),
+                nn.ReLU(inplace=True)
+            ])
         elif gnn_type == 'gcn':
-            self.gnn_layers = nn.Sequential(GCNConv(in_channels, in_channels), nn.LayerNorm(in_channels), nn.ReLU(inplace=True))
-        self.ffn = nn.Sequential(nn.Linear(in_channels, in_channels), nn.LayerNorm(in_channels))
-    
+            self.gnn_layers = Sequential('x,edge_index,batch', [
+                (GCNConv(in_channels, in_channels), 'x,edge_index -> x'),
+                (LayerNorm(in_channels), 'x,batch -> x'),
+                nn.ReLU(inplace=True)
+            ])
+
+        self.ffn = Sequential('x,batch', [
+            (nn.Linear(in_channels, in_channels), 'x -> x'),
+            (LayerNorm(in_channels), 'x,batch -> x'),
+            nn.ReLU(inplace=True)
+        ]
+        )
+
     def forward(self, x, edge_index, batch):
         if self.pGin == False:
             x = x + self.gnn_layers(x, edge_index, batch)

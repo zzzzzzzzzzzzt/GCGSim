@@ -92,7 +92,7 @@ class DiffDecouple(nn.Module):
             ), eps=True))
         elif self.gnn_enc           == 'FFNGIN':
             self.embedding = nn.Linear(self.n_feat, self.filters[0])
-            for i in range(self.num_filter-1):
+            for i in range(self.num_filter):
                 self.gnn_list.append(FFNGIN(self.filters[i], 'gin'))
         else:
             raise NotImplementedError("Unknown GNN-Operator.")
@@ -201,15 +201,15 @@ class DiffDecouple(nn.Module):
         g2_pool                     = list()
 
         if self.gnn_enc             == 'FFNGIN':
-            edge_index_1            = self.embedding(edge_index_1)
-            edge_index_2            = self.embedding(edge_index_2)
+            conv_source_1            = self.embedding(conv_source_1)
+            conv_source_2            = self.embedding(conv_source_2)
         for i in range(self.num_filter):
-            if self.config.get('convolpass', True):
+            if self.gnn_enc         != 'FFNGIN':
                 conv_source_1       = self.convolutional_pass(self.gnn_list[i], edge_index_1, conv_source_1)
                 conv_source_2       = self.convolutional_pass(self.gnn_list[i], edge_index_2, conv_source_2)
             else:
-                conv_source_1       = self.gnn_list[i](conv_source_1, edge_index_1)
-                conv_source_2       = self.gnn_list[i](conv_source_2, edge_index_2)
+                conv_source_1       = self.gnn_list[i](conv_source_1, edge_index_1, batch_1)
+                conv_source_2       = self.gnn_list[i](conv_source_2, edge_index_2, batch_2)
 
             # if self.config['graph_encoder'] == 'GCA': 
             #     # generate common feature
