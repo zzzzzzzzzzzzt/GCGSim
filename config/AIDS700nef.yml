@@ -42,7 +42,7 @@ GSC_GNN:
   outer_mlp_layers: 1
   use_mlp_score: True
   mlp_score_layer: 2
-  batch_size: 1024
+  batch_size: 128
   val_batch_size: 512
   use_sim: True
   NTN_layers: 4
