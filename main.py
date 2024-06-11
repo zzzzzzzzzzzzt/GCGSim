@@ -276,13 +276,13 @@ if __name__ == "__main__":
     else:
         print("total graphs = {}"                                   .format(dataset.num_graphs))
         print("train_gs.len={} and val_gs.len={} and test_gs.len={}".format(dataset.num_train_graphs, dataset.num_val_graphs, dataset.num_test_graphs))
+        date = datetime.datetime.now().strftime('%Y-%m-%d')
         for run_id in range(config['multirun']):   # one mask
             logger.add_line()
             logger.log ("\t\t%d th Run" % run_id)
             logger.add_line()
             # set_random_seed(seeds[run_id])
             # logger.log ("Seed set to %d." % seeds[run_id])
-            date = datetime.datetime.now().strftime('%Y-%m-%d')
             model, best_metric_epoch ,report_mse_test, report_rho_test,report_tau_test,report_prec_at_10_test,report_prec_at_20_test, loss,PATH_MODEL, best_val_results \
                 = main(args, config, logger, run_id, dataset, date, args.train_name)
 
