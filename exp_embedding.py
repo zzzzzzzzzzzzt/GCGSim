@@ -1161,13 +1161,13 @@ def get_color_map(gs, trainval_graphs, use_color = True):
 
 if __name__ == "__main__":
     parser = ArgumentParser()
-    parser.add_argument('--dataset',           type = str,              default = 'AIDS700nef') 
+    parser.add_argument('--dataset',           type = str,              default = 'IMDBMulti') 
     parser.add_argument('--data_dir',          type = str,              default = 'datasets/')
     parser.add_argument('--extra_dir',         type = str,              default = 'exp/')    
     parser.add_argument('--gpu_id',            type = int  ,            default = 0)
     parser.add_argument('--model',             type = str,              default = 'GSC_GNN')  # GCN, GAT or other
     parser.add_argument('--recache',         action = "store_true",        help = "clean up the old adj data", default=True)
-    parser.add_argument('--pretrain_path',     type = str,              default = 'model_saved/AIDS700nef/2024-06-06/FFNGIN_0')
+    parser.add_argument('--pretrain_path',     type = str,              default = 'model_saved/IMDBMulti/2024-06-16/FFNGIN_IMDBMulti_sum_0')
     args = parser.parse_args()
     # import os
     # os.environ['CUDA_LAUNCH_BLOCKING'] = '1'

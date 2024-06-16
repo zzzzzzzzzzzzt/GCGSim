@@ -7,9 +7,9 @@ GSC_GNN:
   use_val: True
   val_ratio: 0.25
   iter_val_start: 9000
-  iter_val_every: 25
+  iter_val_every: 10
   save_best: True
-  save_best_all: False
+  save_best_all: True
   multilabel: False
   patience: -1
   seed: -1
@@ -27,9 +27,10 @@ GSC_GNN:
   scale: 1
   show_last: False   
 
-  gnn_encoder: "GIN"      
+  gnn_encoder: "FFNGIN"
+  graph_encoder: 'deepset'    
   multi_contrast: False
-  gnn_filters: [64]
+  gnn_filters: [64, 64, 64, 64]
   dropout: 0.
 
   deepsets: True
@@ -45,14 +46,14 @@ GSC_GNN:
 
   use_mlp_score: True
   mlp_score_layer: 2
-  batch_size: 256
+  batch_size: 128
   val_batch_size: 512
   use_all_val: True
   val_size: 60000
 
 
   use_sim: True
-  NTN_layers: 1
+  NTN_layers: 4
   tensor_neurons: 16
   output_comb: True  
 
@@ -68,4 +69,17 @@ GSC_GNN:
 
   clip_grad: False
   num_works: 10
-  
+  board_log: True
+  reconstruction: False
+  sim_rat: True
+  noise: True
+  cat_disloss: False
+  cat_NTN: True
+  com_att: False
+  alpha_weight: 0.04
+  beta_weight: 0.04
+  mu_weight: 0.0
+  lambda_weight: 1.0
+  rho_weight: 1.0
+  schedule_start: -1
+  detach: False
