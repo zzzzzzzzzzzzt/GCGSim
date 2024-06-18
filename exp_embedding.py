@@ -455,10 +455,10 @@ def compri_sim_distribution(ground_truth_ged, graph_embs_dicts):
         save_fig(plt, dir_, img_name)
         plt.close()
 
-def emb_hist_heat(prediction_mat, graph_embs_dicts, node_embs_dicts):
+def nodecp_sim_matrix_hist_heat(prediction_mat, graph_embs_dicts, node_embs_dicts):
     sort_id_mat_pre = np.argsort(prediction_mat,  kind = 'mergesort')[:, ::-1]
     gidraw = [0, 1, 2, 3, 4, 5, 6, 7, 8 ,9 , 10 ,11,22, 21, 76,64]
-    rankcol = [10,]  
+    rankcol = [1,]  
     filter_list = [0,1,2,3]
 
     for i_filter in filter_list:
@@ -491,7 +491,12 @@ def emb_hist_heat(prediction_mat, graph_embs_dicts, node_embs_dicts):
                 heatmap(g1n2_cos_matrix, ['C1', 'P1'], None, ax=g1n2_ax, cmap="YlGn")
                 heatmap(n1n2_cos_matrix, ["G%i"% i for i in range(len(node1_emb))], ["g%i"% i for i in range(len(node2_emb))], ax=n1n2_ax, cmap="YlGn",)
                 # fig.tight_layout()
-                save_fig(plt, 'img', 'c')
+                _, mode_dir = osp.split(args.pretrain_path)
+                exp_figure_name = 'sim_matrix_hist_heat'
+                dir_ = osp.join('img', mode_dir, exp_figure_name)
+                img_name = '{}_{}_filter_{}'.format(test_id, traval_id, i_filter)
+
+                save_fig(plt, dir_, img_name)
                 plt.close()
 
 def heatmap(data, row_labels, col_labels, ax=None,
@@ -1196,14 +1201,5 @@ if __name__ == "__main__":
     node_embs_dicts,               \
     graph_cdistri_dicts            = evaluate(dataset.testing_graphs, dataset.trainval_graphs, model, dataset, config)
 
-    # compri_sim_distribution(dataset.testing_graphs, dataset.trainval_graphs, model, dataset, config, args)
-    # compri_distri_distribution(scores, ground_truth, graph_cdistri_dicts)
-    # loss_sim_distribution(scores, ground_truth_ged, ground_truth)
-    # compri_sim_distribution(ground_truth_ged, graph_embs_dicts)
-    # loss_sim_distribution(scores, ground_truth_ged, ground_truth, prediction_mat)
-    emb_hist(ground_truth_ged, graph_embs_dicts)
-    # compri_distri_distribution(scores, ground_truth, graph_cdistri_dicts)
-    # compri_dist_l2(ground_truth_ged, graph_embs_dicts, dataset)
-    # compri_dist_l2(dataset.testing_graphs, dataset.trainval_graphs, model, dataset, config, args)
-    # visualize_embeddings_gradual(args, dataset.testing_graphs, dataset.trainval_graphs, model)
+    nodecp_sim_matrix_hist_heat(prediction_mat, graph_embs_dicts, node_embs_dicts)
 
