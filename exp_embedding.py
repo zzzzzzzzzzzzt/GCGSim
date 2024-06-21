@@ -103,11 +103,13 @@ def loss_sim_distribution(scores, ground_truth_ged, ground_truth, prediction_mat
     nged = []
     nloss = []
     nstep = 20
+    findnumlist = []
     step = (nged_max - nged_min)/nstep
 
     for i in range(nstep):
         find = np.where((ground_truth>=i*step) & (ground_truth<(i+1)*step), scores, 0.0)
         find_num = len(np.nonzero(find)[0])
+        findnumlist.append(find_num)
         find_average = find.sum()/find_num
         nged.append('{:.1f}-{:.1f}/{}'.format(i*step, (i+1)*step, find_num))
         nloss.append(find_average)
@@ -150,6 +152,24 @@ def loss_sim_distribution(scores, ground_truth_ged, ground_truth, prediction_mat
     ax.set_title('{:.5f} gt related to the distribution of GED'.format(scores.mean()))
     
     save_fig(plt, osp.join('img', mode_dir, exp_figure_name), 'pre_distribution')
+    plt.close()
+
+    fig, (ax_ged, ax_nged) = plt.subplots(1, 2, figsize=(14.4, 4.8))
+
+    ax_ged.bar(nged, findnumlist, width=0.5)
+    ax_ged.tick_params(axis='x', labelrotation=90)
+    ax_ged.set_ylabel('GED average')
+    ax_ged.set_xlabel('ged/num')
+    ax_ged.set_title('GED distribution')
+
+    ax_nged.bar(nged, nloss, width=0.5)
+    ax_nged.tick_params(axis='x', labelrotation=90)
+    ax_nged.set_ylabel('loss average')
+    ax_nged.set_xlabel('nged/num')
+    ax_nged.set_title('loss distribution')
+
+    save_fig(plt, osp.join('img', mode_dir, exp_figure_name), 'GED_loss_distribution')
+    plt.close()
 
 def compri_dist_l2(ground_truth_ged, graph_embs_dicts, dataset):
     len_trival                     = len(dataset.trainval_graphs)
@@ -1166,13 +1186,13 @@ def get_color_map(gs, trainval_graphs, use_color = True):
 
 if __name__ == "__main__":
     parser = ArgumentParser()
-    parser.add_argument('--dataset',           type = str,              default = 'AIDS700nef') 
+    parser.add_argument('--dataset',           type = str,              default = 'LINUX') 
     parser.add_argument('--data_dir',          type = str,              default = 'datasets/')
     parser.add_argument('--extra_dir',         type = str,              default = 'exp/')    
     parser.add_argument('--gpu_id',            type = int  ,            default = 0)
     parser.add_argument('--model',             type = str,              default = 'GSC_GNN')  # GCN, GAT or other
     parser.add_argument('--recache',         action = "store_true",        help = "clean up the old adj data", default=True)
-    parser.add_argument('--pretrain_path',     type = str,              default = 'model_saved/AIDS700nef/2024-06-06/FFNGIN_0')
+    parser.add_argument('--pretrain_path',     type = str,              default = 'model_saved/LINUX/2024-06-16/FFNGIN_LINUX_sum_0')
     args = parser.parse_args()
     # import os
     # os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
