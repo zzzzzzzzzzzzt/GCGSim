@@ -363,7 +363,6 @@ class DiffDecouple(nn.Module):
 
     def compute_distance_loss(self, common_feature_1, common_feature_2, private_feature_1, private_feature_2, g1_pool, g2_pool, cat = False):
         f = lambda x: torch.exp(x / self.config.get('tau', 1))
-
         if cat:
             common_feature_1 = [torch.cat(common_feature_1, dim=-1)]
             common_feature_2 = [torch.cat(common_feature_2, dim=-1)]
@@ -405,10 +404,10 @@ class DiffDecouple(nn.Module):
         self.dis_mean_cp1_log = dis_mean_cp1.mean()
         self.dis_mean_cp2_log = dis_mean_cp2.mean()
 
-        dis_cp = self.config['alpha_weight']*(dis_cp1+dis_cp2)
+        dis_com = self.config['alpha_weight']*dis_com
         dis_mean_cp = self.config['beta_weight']*(dis_mean_cp1+dis_mean_cp2) 
         dis_pri = self.config['mu_weight']*dis_pri
-        return ((dis_cp+dis_mean_cp+dis_pri)/dis_com).sum()
+        return -dis_com.sum()+dis_mean_cp.sum()+dis_pri.sum()
 
     def compute_ntn_score(self, common_feature_1, common_feature_2, private_feature_1, private_feature_2, g1_pool, g2_pool):
         if self.config['NTN_layers'] != 1:
