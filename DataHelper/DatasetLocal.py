@@ -170,6 +170,7 @@ class DatasetLocal(dataset):
             shuffle=True,
             batch_size=config['batch_size'], 
             num_workers = config.get('num_works', 0))
+        del datalist
         return source_loader
 
     def transform_batch(self, batch, config):

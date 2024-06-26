@@ -68,6 +68,8 @@ def main(args, config, logger: Logger, run_id: int, dataset: DatasetLocal, date,
             if config['schedule_start'] == -1:
                 p                    = 1.0
             p = 2. / (1. + np.exp(-10 * p)) - 1
+            if epoch % 2 == 0:
+                data["g1"], data["g2"] = data["g2"], data["g1"]
             model, loss, loss_cl, loss_compre, loss_pripre \
                                      = T.train(data, model, loss_func, optimizer, target, p)                 
             loss_sum                 = loss_sum + loss
