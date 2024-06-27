@@ -6,7 +6,7 @@ GSC_GNN:
   epochs: 200
   use_val: True
   val_ratio: 0.25
-  iter_val_start: 150
+  iter_val_start: 50
   iter_val_every: 1
   save_best: True
   save_best_all: True
@@ -65,8 +65,8 @@ GSC_GNN:
   cat_NTN: True
   com_att: False
   alpha_weight: 0.04
-  beta_weight: 0.04
-  mu_weight: 0.0
+  beta_weight: 0.000
+  mu_weight: 0.00001
   lambda_weight: 1.0
   rho_weight: 1.0
   schedule_start: -1
