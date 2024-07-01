@@ -3,10 +3,10 @@ dataset: "AIDS700nef"
 model_name: "GSC_GNN"
 
 GSC_GNN:
-  epochs: 200
+  epochs: 50
   use_val: True
   val_ratio: 0.25
-  iter_val_start: 50
+  iter_val_start: 1
   iter_val_every: 1
   save_best: True
   save_best_all: True
@@ -25,10 +25,10 @@ GSC_GNN:
   feat_norm: False
   synth: False
   scale: 1
-  gnn_encoder: 'FFNGIN'
+  gnn_encoder: 'GIN'
   graph_encoder: 'deepset'
   multi_contrast: False
-  gnn_filters: [64, 64, 64, 64]
+  gnn_filters: [64, 64, 32, 16]
   dropout: 0.0
   deepsets: True
   use_bn: False
@@ -42,7 +42,7 @@ GSC_GNN:
   outer_mlp_layers: 1
   use_mlp_score: True
   mlp_score_layer: 2
-  batch_size: 128
+  batch_size: 64
   val_batch_size: 512
   use_sim: True
   NTN_layers: 4
@@ -64,9 +64,9 @@ GSC_GNN:
   cat_disloss: False
   cat_NTN: True
   com_att: False
-  alpha_weight: 0.04
-  beta_weight: 0.000
-  mu_weight: 0.00001
+  alpha_weight: 0.0
+  beta_weight: 0.0
+  mu_weight: 0.0
   lambda_weight: 1.0
   rho_weight: 1.0
   schedule_start: -1

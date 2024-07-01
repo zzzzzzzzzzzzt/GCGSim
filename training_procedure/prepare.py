@@ -13,7 +13,7 @@ def prepare_train(self, model):
                                                                        weight_decay    = config.get('weight_decay', 0) )
     if config.get('lr_scheduler', False):
         scheduler        = torch.optim.lr_scheduler.StepLR(optimizer,  config['step_size'],gamma=config['gamma'])
-    loss_func            = nn   .MSELoss(reduction='sum')
+    loss_func            = nn   .MSELoss(reduction='mean')
     return optimizer, loss_func
 
 def prepare_model(self, dataset: DatasetLocal):

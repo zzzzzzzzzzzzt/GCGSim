@@ -407,7 +407,7 @@ class DiffDecouple(nn.Module):
         dis_com = self.config['alpha_weight']*dis_com
         dis_mean_cp = self.config['beta_weight']*(dis_mean_cp1+dis_mean_cp2) 
         dis_pri = self.config['mu_weight']*dis_pri
-        return -dis_com.sum()+dis_mean_cp.sum()+dis_pri.sum()
+        return -dis_com.mean()+dis_mean_cp.mean()+dis_pri.mean()
 
     def compute_ntn_score(self, common_feature_1, common_feature_2, private_feature_1, private_feature_2, g1_pool, g2_pool):
         if self.config['NTN_layers'] != 1:
