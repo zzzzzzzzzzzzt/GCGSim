@@ -76,8 +76,9 @@ class DiffDecouple(nn.Module):
             for i in range(self.num_filter-1):   # num_filter = 3    i = 0,1   
                 self.gnn_list.append(GATConv(self.filters[i],self.filters[i+1]))  
         elif self.gnn_enc           == 'GIN':
+            self.embedding = nn.Linear(self.n_feat, self.filters[0])
             self.gnn_list.append(GINConv(torch.nn.Sequential(
-                torch.nn.Linear(self.n_feat, self.filters[0]),
+                torch.nn.Linear(self.filters[0], self.filters[0]),
                 torch.nn.ReLU(),
                 torch.nn.Linear(self.filters[0], self.filters[0]),
                 torch.nn.BatchNorm1d(self.filters[0]),
@@ -200,7 +201,7 @@ class DiffDecouple(nn.Module):
         g1_pool                     = list()
         g2_pool                     = list()
 
-        if self.gnn_enc             == 'FFNGIN':
+        if self.gnn_enc             == 'FFNGIN' or 'GIN':
             conv_source_1            = self.embedding(conv_source_1)
             conv_source_2            = self.embedding(conv_source_2)
         for i in range(self.num_filter):
