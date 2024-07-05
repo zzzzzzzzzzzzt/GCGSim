@@ -171,6 +171,23 @@ def loss_sim_distribution(scores, ground_truth_ged, ground_truth, prediction_mat
     save_fig(plt, osp.join('img', mode_dir, exp_figure_name), 'GED_loss_distribution')
     plt.close()
 
+def GED_distribution(ground_truth):
+    fig, (ax_1, ax_2) = plt.subplots(1, 2)
+
+    ax_1.hist(ground_truth.flatten(), 50)
+    ax_1.set_xlabel('similarity')
+    ax_1.set_title('testdatabase similarity distribution')
+
+    train_nged_list = dataset.trainval_nged_matrix[0:len(dataset.training_graphs), 0:len(dataset.training_graphs)].cpu().detach().numpy().flatten()
+    ax_2.hist(np.exp(-train_nged_list), 50)
+    ax_2.set_title('traindatabase similarity distribution')
+    _, mode_dir = osp.split(args.pretrain_path)
+    exp_figure_name = 'sim_distribution'
+
+    save_fig(plt, osp.join('img', mode_dir, exp_figure_name), 'sim_distribution')
+    plt.tight_layout()
+    plt.close()
+    
 def compri_dist_l2(ground_truth_ged, graph_embs_dicts, dataset):
     len_trival                     = len(dataset.trainval_graphs)
     sort_id_mat                    = np.argsort(ground_truth_ged,  kind = 'mergesort')
