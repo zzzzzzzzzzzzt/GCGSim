@@ -266,6 +266,7 @@ if __name__ == "__main__":
     print_config(config)
     all_org_wei                  = []
     all_gen_wei                  = []
+    results_list                 = []
     if args.run_pretrain:
         pretrain_model           = GSC(config, dataset.input_dim).cuda()
         pretrain_model_para      = osp.join(args.pretrain_path, 'GSC_GNN_{}_checkpoint.pth'.format(args.dataset))
@@ -298,6 +299,25 @@ if __name__ == "__main__":
                 'prec_at_10': report_prec_at_10_test,
                 'prec_at_20': report_prec_at_20_test
             }
+            results_list.append(test_results)
+            if run_id == config['multirun']-1:
+                average_results = {
+                    'mse'       : 0,
+                    'rho'       : 0,
+                    'tau'       : 0,
+                    'prec_at_10': 0,
+                    'prec_at_20': 0 }
+                for j in range(config['multirun']):
+                    average_results['mse'] += results_list[j]['mse']
+                    average_results['rho'] += results_list[j]['rho']
+                    average_results['tau'] += results_list[j]['tau']
+                    average_results['prec_at_10'] += results_list[j]['prec_at_10']
+                    average_results['prec_at_20'] += results_list[j]['prec_at_20']
+                average_results['mse'] /= config['multirun']
+                average_results['rho'] /= config['multirun']
+                average_results['tau'] /= config['multirun']
+                average_results['prec_at_10'] /= config['multirun']
+                average_results['prec_at_20'] /= config['multirun']
             with open(osp.join(PATH_MODEL, 'result.txt'), 'w') as f:
                 f.write('\n')
                 for k, v       in   best_val_results.items():
@@ -305,7 +325,10 @@ if __name__ == "__main__":
                 f.write('\n')
                 for key, value in   test_results.items():
                     f.write('%s: %s\n'         % (key, value))
-
+                if run_id == config['multirun']-1:
+                    f.write('\n')
+                    for key, value in   average_results.items():
+                        f.write('%s: %s\n'         % (key, value))                    
             if args.save_model:
                 save_model(config, args.dataset, model)
 

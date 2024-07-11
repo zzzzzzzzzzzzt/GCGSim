@@ -21,7 +21,7 @@ GSC_GNN:
   optimizer: 'Adam'
   num_layers: 2
   activation: 'relu'
-  multirun: 2
+  multirun: 5
   feat_norm: False
   synth: False
   scale: 1
@@ -48,7 +48,7 @@ GSC_GNN:
   NTN_layers: 4
   tensor_neurons: 16
   output_comb: True
-  use_ssl: True
+  use_ssl: False
   use_compre: False
   use_pripre: False
   use_deepsets: False
@@ -64,9 +64,9 @@ GSC_GNN:
   cat_disloss: False
   cat_NTN: True
   com_att: False
-  alpha_weight: 0.0001
+  alpha_weight: 0.0
   beta_weight: 0.0
-  mu_weight: 0.00001
+  mu_weight: 0.0
   lambda_weight: 1.0
   rho_weight: 1.0
   schedule_start: -1
