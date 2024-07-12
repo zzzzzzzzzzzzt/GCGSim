@@ -76,8 +76,9 @@ class DiffDecouple(nn.Module):
             for i in range(self.num_filter-1):   # num_filter = 3    i = 0,1   
                 self.gnn_list.append(GATConv(self.filters[i],self.filters[i+1]))  
         elif self.gnn_enc           == 'GIN':
+            self.embedding = nn.Linear(self.n_feat, self.filters[0])
             self.gnn_list.append(GINConv(torch.nn.Sequential(
-                torch.nn.Linear(self.n_feat, self.filters[0]),
+                torch.nn.Linear(self.filters[0], self.filters[0]),
                 torch.nn.ReLU(),
                 torch.nn.Linear(self.filters[0], self.filters[0]),
                 torch.nn.BatchNorm1d(self.filters[0]),
@@ -200,7 +201,7 @@ class DiffDecouple(nn.Module):
         g1_pool                     = list()
         g2_pool                     = list()
 
-        if self.gnn_enc             == 'FFNGIN':
+        if self.gnn_enc             == 'FFNGIN' or 'GIN':
             conv_source_1            = self.embedding(conv_source_1)
             conv_source_2            = self.embedding(conv_source_2)
         for i in range(self.num_filter):
@@ -363,7 +364,6 @@ class DiffDecouple(nn.Module):
 
     def compute_distance_loss(self, common_feature_1, common_feature_2, private_feature_1, private_feature_2, g1_pool, g2_pool, cat = False):
         f = lambda x: torch.exp(x / self.config.get('tau', 1))
-
         if cat:
             common_feature_1 = [torch.cat(common_feature_1, dim=-1)]
             common_feature_2 = [torch.cat(common_feature_2, dim=-1)]
@@ -405,10 +405,10 @@ class DiffDecouple(nn.Module):
         self.dis_mean_cp1_log = dis_mean_cp1.mean()
         self.dis_mean_cp2_log = dis_mean_cp2.mean()
 
-        dis_cp = self.config['alpha_weight']*(dis_cp1+dis_cp2)
+        dis_com = self.config['alpha_weight']*dis_com
         dis_mean_cp = self.config['beta_weight']*(dis_mean_cp1+dis_mean_cp2) 
         dis_pri = self.config['mu_weight']*dis_pri
-        return ((dis_cp+dis_mean_cp+dis_pri)/dis_com).sum()
+        return -dis_com.mean()+dis_mean_cp.mean()+dis_pri.mean()
 
     def compute_ntn_score(self, common_feature_1, common_feature_2, private_feature_1, private_feature_2, g1_pool, g2_pool):
         if self.config['NTN_layers'] != 1:
