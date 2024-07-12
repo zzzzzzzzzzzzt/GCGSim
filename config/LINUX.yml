@@ -3,16 +3,16 @@ dataset: "LINUX"
 model_name: "GSC_GNN"
 
 GSC_GNN:
-  epochs: 10000
+  epochs: 50
   use_val: True
   val_ratio: 0.25
-  iter_val_start: 9000
-  iter_val_every: 10
+  iter_val_start: 1
+  iter_val_every: 1
   save_best: True
   save_best_all: True
   multilabel: False
   patience: -1
-  seed: -1
+  seed: 1234
   lr: 0.001              
   weight_decay: 0.000   
   lr_scheduler: False
@@ -21,16 +21,16 @@ GSC_GNN:
   optimizer: "Adam"
   num_layers: 2
   activation: "relu"
-  multirun: 1
+  multirun: 5
   feat_norm: False
   synth: False
   scale: 1
   show_last: False
 
-  gnn_encoder: "FFNGIN"
+  gnn_encoder: "GIN"
   graph_encoder: 'deepset'      
   multi_contrast: False
-  gnn_filters: [64, 64, 64, 64]
+  gnn_filters: [64, 64, 32, 16]
   dropout: 0.
 
   deepsets: True
@@ -46,7 +46,7 @@ GSC_GNN:
 
   use_mlp_score: True
   mlp_score_layer: 2
-  batch_size: 128
+  batch_size: 64
   val_batch_size: 512
   use_all_val: True
   val_size: 50000
@@ -56,7 +56,7 @@ GSC_GNN:
   tensor_neurons: 16
   output_comb: True  
 
-  use_ssl: True
+  use_ssl: False
   use_compre: False
   use_pripre: False
   use_deepsets: False
@@ -73,8 +73,8 @@ GSC_GNN:
   cat_disloss: False
   cat_NTN: True
   com_att: False
-  alpha_weight: 0.04
-  beta_weight: 0.04
+  alpha_weight: 0.0
+  beta_weight: 0.0
   mu_weight: 0.0
   lambda_weight: 1.0
   rho_weight: 1.0
