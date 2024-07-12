@@ -27,6 +27,7 @@ import matplotlib.pyplot as plt
 from collections import OrderedDict, defaultdict
 import os.path as osp
 TRUE_MODEL = 'astar'
+from scipy.stats import spearmanr, kendalltau
 
 @torch.no_grad()
 def evaluate(testing_graphs, training_graphs, model, dataset: DatasetLocal, config, emb_log=True):
@@ -48,6 +49,11 @@ def evaluate(testing_graphs, training_graphs, model, dataset: DatasetLocal, conf
         for n in ['g1', 'g2']:
             node_embs_dicts[i_filter][n] = list()
 
+    rho_list                       = []
+    tau_list                       = []
+    prec_at_10_list                = []
+    prec_at_20_list                = []
+
     num_test_pairs                 = len(testing_graphs) * len(training_graphs)
     t                              = tqdm(total=num_test_pairs)
 
@@ -68,6 +74,26 @@ def evaluate(testing_graphs, training_graphs, model, dataset: DatasetLocal, conf
         prediction_mat[i]          = prediction.cpu().detach().numpy()
         scores[i]                  = ( F.mse_loss(prediction.cpu().detach(), target, reduction="none").numpy())
 
+        rho_list.append(
+            calculate_ranking_correlation(
+                spearmanr, prediction_mat[i], ground_truth[i]
+            )
+        )
+        tau_list.append(
+            calculate_ranking_correlation(
+                kendalltau, prediction_mat[i], ground_truth[i]
+            )
+        )
+        prec_at_10_list.append(
+            calculate_prec_at_k(
+                10, prediction_mat[i], ground_truth[i], ground_truth_ged[i]
+            )
+        )
+        prec_at_20_list.append(
+            calculate_prec_at_k(
+                20, prediction_mat[i], ground_truth[i], ground_truth_ged[i]
+            )
+        )
         # if type(model.c_distri_list) is list:
         #     c_distri_list = [model.c_distri_list[i].cpu().detach().numpy() for i in range(model.num_filter)]
         # else:
@@ -84,8 +110,24 @@ def evaluate(testing_graphs, training_graphs, model, dataset: DatasetLocal, conf
                 node_embs_dicts[i_filter]['g2'].append((model.nod2_list[i_filter][0].cpu().detach().numpy(), model.nod2_list[i_filter][1].cpu().detach().numpy()))
         t.update(len(training_graphs))
 
-    return scores, ground_truth, ground_truth_ged, ground_truth_nged, prediction_mat, graph_embs_dicts, node_embs_dicts, graph_cdistri_dicts
+    rho                            = np.mean(rho_list).item()
+    tau                            = np.mean(tau_list).item()
+    prec_at_10                     = np.mean(prec_at_10_list).item()
+    prec_at_20                     = np.mean(prec_at_20_list).item()
+    model_mse_error                = np.mean(scores).item()
+    def print_evaluation(model_mse,test_rho,test_tau,test_prec_at_10,test_prec_at_20):
+        """
+        Printing the error rates.
+        """
+        print("\nmse(10^-3): "   + str(round(model_mse * 1000, 5)) + ".")
+        print("Spearman's rho: " + str(round(test_rho, 5)) + ".")
+        print("Kendall's tau: "  + str(round(test_tau, 5)) + ".")
+        print("p@10: "           + str(round(test_prec_at_10, 5)) + ".")
+        print("p@20: "           + str(round(test_prec_at_20, 5)) + ".")
+    print_evaluation(model_mse_error, rho, tau, prec_at_10, prec_at_20)   
 
+    return scores, ground_truth, ground_truth_ged, ground_truth_nged, prediction_mat, graph_embs_dicts, node_embs_dicts, graph_cdistri_dicts
+    
 def loss_sim_distribution(scores, ground_truth_ged, ground_truth, prediction_mat):
     ged_max = int(np.max(ground_truth_ged))
     ged_min = int(np.min(ground_truth_ged))
@@ -1203,13 +1245,13 @@ def get_color_map(gs, trainval_graphs, use_color = True):
 
 if __name__ == "__main__":
     parser = ArgumentParser()
-    parser.add_argument('--dataset',           type = str,              default = 'LINUX') 
+    parser.add_argument('--dataset',           type = str,              default = 'AIDS700nef') 
     parser.add_argument('--data_dir',          type = str,              default = 'datasets/')
     parser.add_argument('--extra_dir',         type = str,              default = 'exp/')    
     parser.add_argument('--gpu_id',            type = int  ,            default = 0)
     parser.add_argument('--model',             type = str,              default = 'GSC_GNN')  # GCN, GAT or other
     parser.add_argument('--recache',         action = "store_true",        help = "clean up the old adj data", default=True)
-    parser.add_argument('--pretrain_path',     type = str,              default = 'model_saved/LINUX/2024-06-16/FFNGIN_LINUX_sum_0')
+    parser.add_argument('--pretrain_path',     type = str,              default = 'model_saved/AIDS700nef/2024-07-11/GIN_trainall_emb_use_sslFalse_0')
     args = parser.parse_args()
     # import os
     # os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
