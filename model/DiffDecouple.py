@@ -38,8 +38,12 @@ class DiffDecouple(nn.Module):
             for i in range(self.num_filter):
                 filters.append(self.filters[0])
             self.filters            = filters
-        self.gnn_list               = nn.ModuleList()  
-        self.NTN_list               = nn.ModuleList()
+        self.gnn_list               = nn.ModuleList()
+        if self.config['cat_NTN']:  
+            self.NTN_list           = nn.ModuleList()
+        else:
+            self.c_NTN_list         = nn.ModuleList()
+            self.p_NTN_list         = nn.ModuleList()
         self.NTN_ged_list           = nn.ModuleList()
         # if self.config['graph_encoder'] == 'GCA':
         #     self.com_list           = nn.ModuleList()  
@@ -105,12 +109,15 @@ class DiffDecouple(nn.Module):
                 if self.config['cat_NTN']:
                     self.NTN_list.append(TensorNetworkModule(self.config, 2*self.filters[i]))
                 else:
-                    self.NTN_list.append(TensorNetworkModule(self.config, self.filters[i]))
+                    self.c_NTN_list.append(TensorNetworkModule(self.config, self.filters[i]))
+                    self.p_NTN_list.append(TensorNetworkModule(self.config, self.filters[i]))
                 self.NTN_ged_list.append(TensorNetworkModule(self.config, self.filters[i]))
         else:
             raise NotImplementedError("Error NTN_layer number.")
          
-        self.score_sim_layer        = nn.Sequential(nn.Linear(self.config['tensor_neurons']*self.config['NTN_layers'], self.config['tensor_neurons']),
+        self.score_sim_layer        = nn.Sequential(nn.Linear(2*self.config['tensor_neurons']*self.config['NTN_layers'], self.config['tensor_neurons']*self.config['NTN_layers']),
+                                                    nn.ReLU(),
+                                                    nn.Linear(self.config['tensor_neurons']*self.config['NTN_layers'], self.config['tensor_neurons']),
                                                     nn.ReLU(),
                                                     nn.Linear(self.config['tensor_neurons'] , 1))
         self.ged_sim_layer          = nn.Sequential(nn.Linear(self.config['tensor_neurons']*self.config['NTN_layers'], self.config['tensor_neurons']),
@@ -411,14 +418,10 @@ class DiffDecouple(nn.Module):
         return -dis_com.mean()+dis_mean_cp.mean()+dis_pri.mean()
 
     def compute_ntn_score(self, common_feature_1, common_feature_2, private_feature_1, private_feature_2, g1_pool, g2_pool):
-        if self.config['NTN_layers'] != 1:
+        if self.config['cat_NTN']:
             feature_1 = [torch.cat((common_feature_1[i], private_feature_1[i]), dim=-1) for i in range(self.num_filter)]
             feature_2 = [torch.cat((common_feature_2[i], private_feature_2[i]), dim=-1) for i in range(self.num_filter)]
-        else:
-            feature_1 = [torch.cat((common_feature_1[-1], private_feature_1[-1]), dim=-1)]
-            feature_2 = [torch.cat((common_feature_2[-1], private_feature_2[-1]), dim=-1)]
-            
-        if self.config['cat_NTN']:    
+              
             for i in range(self.config['NTN_layers']):
                 ntn_score               = (
                                             self.NTN_list[i](feature_1[i], feature_2[i])
@@ -426,7 +429,12 @@ class DiffDecouple(nn.Module):
                                             else torch.cat((ntn_score, self.NTN_list[i](feature_1[i], feature_2[i])), dim=-1)
                                             )
         else:
-            ntn_score = torch.cat([self.NTN_list[i](g1_pool[i], g2_pool[i]) for i in range(self.config['NTN_layers'])], dim=-1)
+            ntn_score = []
+            for i in range(self.config['NTN_layers']):
+                c_ntn_score = self.c_NTN_list[i](common_feature_1[i], common_feature_2[i])
+                p_ntn_score = self.p_NTN_list[i](private_feature_1[i], private_feature_2[i])
+                ntn_score.append(torch.cat([c_ntn_score, p_ntn_score], dim=-1))
+            ntn_score = torch.cat(ntn_score, dim=-1)
         return torch.sigmoid(self.score_sim_layer(ntn_score).squeeze())
     
     def compute_ged_score(self, common_feature_1, common_feature_2, private_feature_1, private_feature_2):
