@@ -1,8 +1,8 @@
 dataset: "LINUX"
 
-model_name: "GSC_GNN"
+model_name: "CPRGsim"
 
-GSC_GNN:
+CPRGsim:
   epochs: 10000
   use_val: True
   val_ratio: 0.25

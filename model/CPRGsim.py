@@ -17,9 +17,94 @@ from typing import Any, Optional, Tuple
 import random
 from torch_geometric.utils import to_dense_batch
 
-class DiffDecouple(nn.Module):
+class CPRGsim(nn.Module):
     def __init__(self, config, n_feat):
-        super(DiffDecouple, self).__init__()
+        super(CPRGsim, self).__init__()
+        self.config = config
+        self.filters = self.config['gnn_filters']
+        self.num_filter = len(self.filters)
+        self.cp_generator = CP_Generator(config, n_feat)
+        self.discriminator = Discriminator(config)
+    
+    def forward(self, data):
+        com_1, com_2, pri_1, pri_2, pool_1, pool_2 = self.cp_generator(data)
+        if self.config['sim_rat']:
+            com_1, com_2, pri_1, pri_2 = self.feature_distri(com_1, com_2, pri_1, pri_2, pool_1, pool_2)
+        score = self.discriminator(com_1, com_2, pri_1, pri_2)
+        return score, None
+
+    def get_sim_rat(self, pool_1, pool_2):
+        com_distri = [F.cosine_similarity(pool_1[i], pool_2[i], dim=-1).unsqueeze(-1) for i in range(self.num_filter)]
+        pri_distri = [1 - com_distri[i] for i in range(self.num_filter)]
+        return com_distri, pri_distri
+    
+    def _feature_distri(self, com_1, com_2, pri_1, pri_2, com_distri, pri_distri):
+        if type(com_distri) is list:
+            com_1 = [com_distri[i]*com_1[i] for i in range(self.num_filter)]
+            com_2 = [com_distri[i]*com_2[i] for i in range(self.num_filter)]
+            pri_1 = [pri_distri[i]*pri_1[i] for i in range(self.num_filter)]
+            pri_2 = [pri_distri[i]*pri_2[i] for i in range(self.num_filter)]
+        else:
+            com_1 = [com_distri*com_1[i] for i in range(self.num_filter)]
+            com_2 = [com_distri*com_2[i] for i in range(self.num_filter)]
+            pri_1 = [pri_distri*pri_1[i] for i in range(self.num_filter)]
+            pri_2 = [pri_distri*pri_2[i] for i in range(self.num_filter)]
+        return com_1, com_2, pri_1, pri_2
+    
+    def feature_distri(self, com_1, com_2, pri_1, pri_2, pool_1, pool_2):
+        com_distri, pri_distri = self.get_sim_rat(pool_1, pool_2)
+        com_1, com_2, pri_1, pri_2 = self._feature_distri(com_1, com_2, pri_1, pri_2, com_distri, pri_distri)
+        return com_1, com_2, pri_1, pri_2
+    
+class Discriminator(nn.Module):
+    def __init__(self, config):
+        super(Discriminator, self).__init__()
+        self.config = config
+        self.filters = self.config['gnn_filters']
+        self.num_filter = len(self.filters)
+        if self.config['cat_NTN']:  
+            self.NTN_list = nn.ModuleList()
+        else:
+            self.c_NTN_list = nn.ModuleList()
+            self.p_NTN_list = nn.ModuleList()     
+        for i in range(self.num_filter):
+            if self.config['cat_NTN']:
+                self.NTN_list.append(TensorNetworkModule(self.config, 2*self.filters[i]))
+            else:
+                self.c_NTN_list.append(TensorNetworkModule(self.config, self.filters[i]))
+                self.p_NTN_list.append(TensorNetworkModule(self.config, self.filters[i]))
+        self.score_sim_layer = nn.Sequential(nn.Linear(2*self.config['tensor_neurons']*self.config['NTN_layers'], self.config['tensor_neurons']*self.config['NTN_layers']),
+                                             nn.ReLU(),
+                                             nn.Linear(self.config['tensor_neurons']*self.config['NTN_layers'], self.config['tensor_neurons']),
+                                             nn.ReLU(),
+                                             nn.Linear(self.config['tensor_neurons'] , 1)) 
+               
+    def forward(self, com_1, com_2, pri_1, pri_2):
+        return self.compute_ntn_score(com_1, com_2, pri_1, pri_2)
+    
+    def compute_ntn_score(self, common_feature_1, common_feature_2, private_feature_1, private_feature_2):
+        if self.config['cat_NTN']:
+            feature_1 = [torch.cat((common_feature_1[i], private_feature_1[i]), dim=-1) for i in range(self.num_filter)]
+            feature_2 = [torch.cat((common_feature_2[i], private_feature_2[i]), dim=-1) for i in range(self.num_filter)]
+              
+            for i in range(self.config['NTN_layers']):
+                ntn_score               = (
+                                            self.NTN_list[i](feature_1[i], feature_2[i])
+                                            if i == 0
+                                            else torch.cat((ntn_score, self.NTN_list[i](feature_1[i], feature_2[i])), dim=-1)
+                                            )
+        else:
+            ntn_score = []
+            for i in range(self.config['NTN_layers']):
+                c_ntn_score = self.c_NTN_list[i](common_feature_1[i], common_feature_2[i])
+                p_ntn_score = self.p_NTN_list[i](private_feature_1[i], private_feature_2[i])
+                ntn_score.append(torch.cat([c_ntn_score, p_ntn_score], dim=-1))
+            ntn_score = torch.cat(ntn_score, dim=-1)
+        return torch.sigmoid(self.score_sim_layer(ntn_score).squeeze())
+    
+class CP_Generator(nn.Module):
+    def __init__(self, config, n_feat):
+        super(CP_Generator, self).__init__()
         self.config                 = config
         self.batchsize              = self.config['batch_size']
         self.n_feat                 = n_feat
@@ -39,16 +124,6 @@ class DiffDecouple(nn.Module):
                 filters.append(self.filters[0])
             self.filters            = filters
         self.gnn_list               = nn.ModuleList()
-        if self.config['cat_NTN']:  
-            self.NTN_list           = nn.ModuleList()
-        else:
-            self.c_NTN_list         = nn.ModuleList()
-            self.p_NTN_list         = nn.ModuleList()
-        self.NTN_ged_list           = nn.ModuleList()
-        # if self.config['graph_encoder'] == 'GCA':
-        #     self.com_list           = nn.ModuleList()  
-        #     self.pri_list           = nn.ModuleList()
-        # elif self.config['graph_encoder'] == 'deepset':
         self.deepset_inner      = nn.ModuleList()  
         self.c_deepset_outer    = nn.ModuleList()
         self.p_deepset_outer    = nn.ModuleList()
@@ -63,8 +138,6 @@ class DiffDecouple(nn.Module):
             self.act_outer      = F.relu
         elif self.config['deepsets_outer_act'] == 'leaky_relu':
             self.act_outer      = partial(F.leaky_relu, negative_slope=self.negative_slope)
-        # self.act_inner          = getattr(F, self.config.get('deepsets_inner_act', 'relu'))
-        # self.act_outer          = getattr(F, self.config.get('deepsets_outer_act', 'relu'))
 
         self.setup_backbone()
         if self.config.get('setup_disentangle', True):
@@ -101,33 +174,6 @@ class DiffDecouple(nn.Module):
                 self.gnn_list.append(FFNGIN(self.filters[i], 'gin'))
         else:
             raise NotImplementedError("Unknown GNN-Operator.")
-
-        if self.config['NTN_layers'] == 1:
-            self.NTN_list.append(TensorNetworkModule(self.config, 2*self.filters[-1]))
-        elif self.config['NTN_layers'] == self.num_filter:
-            for i in range(self.num_filter):
-                if self.config['cat_NTN']:
-                    self.NTN_list.append(TensorNetworkModule(self.config, 2*self.filters[i]))
-                else:
-                    self.c_NTN_list.append(TensorNetworkModule(self.config, self.filters[i]))
-                    self.p_NTN_list.append(TensorNetworkModule(self.config, self.filters[i]))
-                self.NTN_ged_list.append(TensorNetworkModule(self.config, self.filters[i]))
-        else:
-            raise NotImplementedError("Error NTN_layer number.")
-         
-        self.score_sim_layer        = nn.Sequential(nn.Linear(2*self.config['tensor_neurons']*self.config['NTN_layers'], self.config['tensor_neurons']*self.config['NTN_layers']),
-                                                    nn.ReLU(),
-                                                    nn.Linear(self.config['tensor_neurons']*self.config['NTN_layers'], self.config['tensor_neurons']),
-                                                    nn.ReLU(),
-                                                    nn.Linear(self.config['tensor_neurons'] , 1))
-        self.ged_sim_layer          = nn.Sequential(nn.Linear(self.config['tensor_neurons']*self.config['NTN_layers'], self.config['tensor_neurons']),
-                                                    nn.ReLU(),
-                                                    nn.Linear(self.config['tensor_neurons'] , 1))
-        if  self.config['reconstruction'] == True:
-            self.rec_MLP            = nn.Sequential(nn.Linear(2*self.filters[-1],2*self.filters[-1]),
-                                                    nn.ReLU(),
-                                                    nn.Linear(2*self.filters[-1],self.filters[-1]),
-                                                    nn.ReLU())
             
     def setup_disentangle(self):
         # if self.config['graph_encoder'] == 'GCA':
@@ -219,15 +265,6 @@ class DiffDecouple(nn.Module):
                 conv_source_1       = self.gnn_list[i](conv_source_1, edge_index_1, batch_1)
                 conv_source_2       = self.gnn_list[i](conv_source_2, edge_index_2, batch_2)
 
-            # if self.config['graph_encoder'] == 'GCA': 
-            #     # generate common feature
-            #     common_feature_1    .append(self.com_list[i](conv_source_1, batch_1))
-            #     common_feature_2    .append(self.com_list[i](conv_source_2, batch_2))
-
-            #     # generate private feature
-            #     private_feature_1   .append(self.pri_list[i](conv_source_1, batch_1))
-            #     private_feature_2   .append(self.pri_list[i](conv_source_2, batch_2))
-            # elif self.config['graph_encoder'] == 'deepset':
             _common_feature_1,  \
             _common_feature_2,  \
             _private_feature_1, \
@@ -251,30 +288,8 @@ class DiffDecouple(nn.Module):
             self.pri2_list          = private_feature_2
             self.nod1_list          = self.dense_batch(node_feature_1, batch_1)
             self.nod2_list          = self.dense_batch(node_feature_2, batch_2)
-
-        ged_com, ged_pri            = self.compute_ged_score(common_feature_1, common_feature_2, private_feature_1, private_feature_2)
-        if self.config['sim_rat']:
-            com_Di, pri_Di          = self.get_sim_rat(g1_pool, g2_pool)
-            com_distri, pri_distri  = com_Di, pri_Di
-            common_feature_1, \
-            common_feature_2, \
-            private_feature_1, \
-            private_feature_2       = self.feature_distri(common_feature_1, common_feature_2, private_feature_1, private_feature_2, com_distri, pri_distri)
-
-        # computer score and loss
-        ntn_score                   = self.compute_ntn_score(common_feature_1, common_feature_2, private_feature_1, private_feature_2, g1_pool, g2_pool)
-        # ged_com, ged_pri            = self.compute_ged_score(common_feature_1, common_feature_2, private_feature_1, private_feature_2)
-        dis_loss                    = self.compute_distance_loss(common_feature_1, common_feature_2, private_feature_1, private_feature_2, g1_pool, g2_pool, self.config['cat_disloss'])
-
-        # log loss 
-        self.dis_loss_log = dis_loss
-        # self.cor_loss_log = cor_loss
-
-        reg_dict = {'ged_com': ged_com, 
-                    'ged_pri': ged_pri, 
-                    'reg_loss': dis_loss}
         
-        return ntn_score, reg_dict
+        return common_feature_1, common_feature_2, private_feature_1, private_feature_2, g1_pool, g2_pool
 
     def collect_embeddings(self, all_graphs):
         node_embs_dict = dict()  
@@ -541,25 +556,6 @@ class DiffDecouple(nn.Module):
         size = (batch[-1].item() + 1 if size is None else size)   # 一个batch中的图数
         pool = global_add_pool(feat, batch, size=size) if self.config['pooling']=='add' else global_mean_pool(feat, batch, size=size) 
         return pool
-    
-    def get_sim_rat(self, pool_1, pool_2):
-        com_distri = [F.cosine_similarity(pool_1[i], pool_2[i], dim=-1).unsqueeze(-1) for i in range(self.num_filter)]
-        pri_distri = [1 - com_distri[i] for i in range(self.num_filter)]
-        return com_distri, pri_distri
-
-    def feature_distri(self, common_feature_1, common_feature_2, private_feature_1, private_feature_2, com_distri, pri_distri):
-        if type(com_distri) is list:
-            com_1 = [com_distri[i]*common_feature_1[i] for i in range(self.num_filter)]
-            com_2 = [com_distri[i]*common_feature_2[i] for i in range(self.num_filter)]
-            pri_1 = [pri_distri[i]*private_feature_1[i] for i in range(self.num_filter)]
-            pri_2 = [pri_distri[i]*private_feature_2[i] for i in range(self.num_filter)]
-        else:
-            com_1 = [com_distri*common_feature_1[i] for i in range(self.num_filter)]
-            com_2 = [com_distri*common_feature_2[i] for i in range(self.num_filter)]
-            pri_1 = [pri_distri*private_feature_1[i] for i in range(self.num_filter)]
-            pri_2 = [pri_distri*private_feature_2[i] for i in range(self.num_filter)]
-        return com_1, com_2, pri_1, pri_2
-     
     
     def compute_corr(self, x1, x2):
         # Subtract the mean

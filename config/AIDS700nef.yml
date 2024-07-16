@@ -1,8 +1,8 @@
 dataset: "AIDS700nef"
 
-model_name: "GSC_GNN"
+model_name: "CPRGsim"
 
-GSC_GNN:
+CPRGsim:
   epochs: 50
   use_val: True
   val_ratio: 0.25

@@ -81,15 +81,6 @@ def main(args, config, logger: Logger, run_id: int, dataset: DatasetLocal, date,
                 writer               .add_scalar('loss/loss_cl', loss_cl, log_i)
                 writer               .add_scalar('loss/loss_compre', loss_compre, log_i)
                 writer               .add_scalar('loss/loss_pripre', loss_pripre, log_i)
-                writer               .add_scalar('sim/com', model.sim_com_log, log_i)
-                writer               .add_scalar('sim/pri', model.dis_pri_log, log_i)
-                writer               .add_scalar('sim/sim_pri1', model.sim_pri1_log, log_i)
-                writer               .add_scalar('sim/sim_pri2', model.sim_pri2_log, log_i)
-                writer               .add_scalar('sim/dis_cg1', model.dis_cg1_log, log_i)
-                writer               .add_scalar('sim/dis_cg2', model.dis_cg2_log, log_i)
-                writer               .add_scalar('sim/dis_mean_cp1', model.dis_mean_cp1_log, log_i)
-                writer               .add_scalar('sim/dis_mean_cp2', model.dis_mean_cp2_log, log_i)
-                # model                .log_param(writer, log_i)
                 log_i                = log_i + 1
         loss                         = loss_sum / main_index                              
         loss_cl                      = losscl_sum / main_index
@@ -230,7 +221,7 @@ if __name__ == "__main__":
     parser.add_argument('--no_dev',          action = "store_true" ,  default = False)
     parser.add_argument('--patience',          type = int  ,          default = -1)
     parser.add_argument('--gpu_id',            type = int  ,          default = 2)
-    parser.add_argument('--model',             type = str,            default ='GSC_GNN')  # GCN, GAT or other
+    parser.add_argument('--model',             type = str,            default ='CPRGsim')  # GCN, GAT or other
     parser.add_argument('--train_first',       type = bool,           default = True)
     parser.add_argument('--save_model',        type = bool,           default = False)
     parser.add_argument('--run_pretrain',    action ='store_true',    default = False)
