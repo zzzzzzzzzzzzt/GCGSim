@@ -55,6 +55,36 @@ class CPRGsim(nn.Module):
         com_distri, pri_distri = self.get_sim_rat(pool_1, pool_2)
         com_1, com_2, pri_1, pri_2 = self._feature_distri(com_1, com_2, pri_1, pri_2, com_distri, pri_distri)
         return com_1, com_2, pri_1, pri_2
+
+class CPRGsim_ex(CPRGsim):
+    def __init__(self, config, n_feat, ex_emb):
+        self.ex_emb = ex_emb
+        super(CPRGsim_ex, self).__init__(config, n_feat)
+
+    def forward(self, data1, data2):
+        com_1, com_2, pri_1, pri_2, pool_1, pool_2 = self.cp_generator_double(data1, data2)
+        if self.config['sim_rat']:
+            com_1, com_2, pri_1, pri_2 = self.feature_distri_double(com_1, com_2, pri_1, pri_2, pool_1, pool_2)
+        if self.ex_emb:
+            pri_1[0], pri_1[1] = pri_1[1], pri_1[0]
+            pri_2[0], pri_2[1] = pri_2[1], pri_2[0]
+        score = self.discriminator_double(com_1, com_2, pri_1, pri_2)
+        return score
+
+    def cp_generator_double(self, data1, data2):
+        com_1_i, com_2_i, pri_1_i, pri_2_i, pool_1_i, pool_2_i = self.cp_generator(data1)
+        com_1_j, com_2_j, pri_1_j, pri_2_j, pool_1_j, pool_2_j = self.cp_generator(data2)
+        return (com_1_i, com_1_j), (com_2_i, com_2_j), (pri_1_i, pri_1_j), (pri_2_i, pri_2_j), (pool_1_i, pool_1_j), (pool_2_i, pool_2_j)
+    
+    def feature_distri_double(self, com_1, com_2, pri_1, pri_2, pool_1, pool_2):
+        com_1_i, com_2_i, pri_1_i, pri_2_i = self.feature_distri(com_1[0], com_2[0], pri_1[0], pri_2[0], pool_1[0], pool_2[0])
+        com_1_j, com_2_j, pri_1_j, pri_2_j = self.feature_distri(com_1[1], com_2[1], pri_1[1], pri_2[1], pool_1[1], pool_2[1])
+        return (com_1_i, com_1_j), (com_2_i, com_2_j), (pri_1_i, pri_1_j), (pri_2_i, pri_2_j)
+    
+    def discriminator_double(self, com_1, com_2, pri_1, pri_2):
+        score_i = self.discriminator(com_1[0], com_2[0], pri_1[0], pri_2[0])
+        score_j = self.discriminator(com_1[1], com_2[1], pri_1[1], pri_2[1])
+        return (score_i, score_j)
     
 class Discriminator(nn.Module):
     def __init__(self, config):
