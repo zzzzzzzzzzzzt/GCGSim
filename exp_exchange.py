@@ -51,21 +51,35 @@ def gen_pair(g1, g2, n_node, n_feature, n_link):
     GED = n_node + edge_index_p.size()[1] + n_link
     return (g1_added, g2_added), GED
 
-def gen_pairs(data_graph, n_node, n_feature, n_link):
+def gen_pairs(data_graph, n_node, n_feature, n_link, same=True):
     count = len(data_graph)
     mat = torch.full((count, count), float("inf")) 
     norm_mat = torch.full((count, count), float("inf"))
 
     synth_graph = []
     for i in range(count//2):
-        G, GED = gen_pair(data_graph[2*i], data_graph[2*i+1], n_node, n_feature, n_link)
+        if same:
+            one_hot_labels, edge_index_p, link_node = gen_subgraph(n_node, n_feature, n_link)
+            g1_added = joint(data_graph[2*i], one_hot_labels, edge_index_p, link_node)
+            g2_added = joint(data_graph[2*i+1], one_hot_labels, edge_index_p, link_node)
+            ged_1 = n_node + edge_index_p.size()[1] + n_link
+            ged_2 = ged_1
+        # G, GED = gen_pair(data_graph[2*i], data_graph[2*i+1], n_node, n_feature, n_link)
+        else:
+            one_hot_labels, edge_index_p, link_node = gen_subgraph(n_node, n_feature, n_link)
+            g1_added = joint(data_graph[2*i], one_hot_labels, edge_index_p, link_node)
+            ged_1 = n_node + edge_index_p.size()[1] + n_link
 
-        mat[2*i,2*i], mat[2*i+1,2*i+1] = GED, GED
-        norm_mat[2*i,2*i] = GED / (0.5 * (G[0].num_nodes + data_graph[2*i].num_nodes))
-        norm_mat[2*i+1,2*i+1] = GED / (0.5 * (G[1].num_nodes + data_graph[2*i+1].num_nodes))
+            one_hot_labels, edge_index_p, link_node = gen_subgraph(n_node+5, n_feature, n_link+2)
+            g2_added = joint(data_graph[2*i+1], one_hot_labels, edge_index_p, link_node)
+            ged_2 = n_node+5 + edge_index_p.size()[1] + n_link+5
 
-        synth_graph.append(G[0])
-        synth_graph.append(G[1])
+        mat[2*i,2*i], mat[2*i+1,2*i+1] = ged_1, ged_2
+        norm_mat[2*i,2*i] = ged_1 / (0.5 * (g1_added.num_nodes + data_graph[2*i].num_nodes))
+        norm_mat[2*i+1,2*i+1] = ged_2 / (0.5 * (g2_added.num_nodes + data_graph[2*i+1].num_nodes))
+
+        synth_graph.append(g1_added)
+        synth_graph.append(g2_added)
     
     return data_graph, synth_graph, mat, norm_mat
 
@@ -95,7 +109,7 @@ def transform_batch(batch, mat, norm_mat):
     return new_data
 
 @torch.no_grad()
-def evaluate(model, dataset: DatasetLocal, config, n_node=7, n_link=1):
+def evaluate(model, dataset: DatasetLocal, n_node=1, n_link=1):
     model.eval()
 
     training_graphs = dataset.training_graphs
@@ -106,7 +120,7 @@ def evaluate(model, dataset: DatasetLocal, config, n_node=7, n_link=1):
     prediction_mat_ex = np.empty((mapsize,2))
     ground_truth = np.empty((mapsize,2))
 
-    source_graph, synth_graph, mat, norm_mat = gen_pairs(training_graphs, n_node, dataset.input_dim, n_link)
+    source_graph, synth_graph, mat, norm_mat = gen_pairs(training_graphs, n_node, dataset.input_dim, n_link, True)
 
     for i in range(mapsize):
         source_batch = Batch.from_data_list([source_graph[2*i], source_graph[2*i+1]])
@@ -145,9 +159,9 @@ if __name__ == "__main__":
 
     dataset                     = load_data(args, False)
     dataset                     . load(config)
-    model                       = CPRGsim(config, dataset.input_dim).cuda()
+    model                       = CPRGsim(config, dataset.input_dim, True).cuda()
     para                        = osp.join(args.pretrain_path, 'CPRGsim_{}_checkpoint_mse.pth'.format(args.dataset))
     model                       . load_state_dict(torch.load(para))
     model                       . eval()
 
-    evaluate(model, dataset, config)
+    evaluate(model, dataset)

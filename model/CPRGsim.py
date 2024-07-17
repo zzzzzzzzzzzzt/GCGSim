@@ -18,8 +18,9 @@ import random
 from torch_geometric.utils import to_dense_batch
 
 class CPRGsim(nn.Module):
-    def __init__(self, config, n_feat):
+    def __init__(self, config, n_feat, ex=False):
         super(CPRGsim, self).__init__()
+        self.ex = ex
         self.config = config
         self.filters = self.config['gnn_filters']
         self.num_filter = len(self.filters)
@@ -30,6 +31,9 @@ class CPRGsim(nn.Module):
         com_1, com_2, pri_1, pri_2, pool_1, pool_2 = self.cp_generator(data)
         if self.config['sim_rat']:
             com_1, com_2, pri_1, pri_2 = self.feature_distri(com_1, com_2, pri_1, pri_2, pool_1, pool_2)
+        if self.ex:
+            pri_1[0], pri_1[1] = pri_1[1], pri_1[0]
+            pri_2[0], pri_2[1] = pri_2[1], pri_2[0]
         score = self.discriminator(com_1, com_2, pri_1, pri_2)
         return score, None
 
