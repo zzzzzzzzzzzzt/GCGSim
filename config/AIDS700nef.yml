@@ -1,8 +1,8 @@
 dataset: "AIDS700nef"
 
-model_name: "GSC_GNN"
+model_name: "CPRGsim"
 
-GSC_GNN:
+CPRGsim:
   epochs: 50
   use_val: True
   val_ratio: 0.25
@@ -62,7 +62,7 @@ GSC_GNN:
   sim_rat: True
   noise: True
   cat_disloss: False
-  cat_NTN: True
+  cat_NTN: False
   com_att: False
   alpha_weight: 0.0
   beta_weight: 0.0

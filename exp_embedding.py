@@ -3,7 +3,7 @@ from statistics import mode
 import numpy as np
 from rich import print
 from model.GSC import GSC
-from model.DiffDecouple import DiffDecouple
+from model.CPRGsim import CPRGsim
 from argparse import ArgumentParser
 from utils.utils import *
 from utils.vis import vis_small
@@ -1266,7 +1266,7 @@ if __name__ == "__main__":
 
     dataset                     = load_data(args, False)
     dataset                     . load(config)
-    model                       = DiffDecouple(config, dataset.input_dim).cuda()
+    model                       = CPRGsim(config, dataset.input_dim).cuda()
     para                        = osp.join(args.pretrain_path, 'GSC_GNN_{}_checkpoint_mse.pth'.format(args.dataset))
     model                       . load_state_dict(torch.load(para))
     model                       . eval()
