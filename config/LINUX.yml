@@ -21,7 +21,7 @@ CPRGsim:
   optimizer: "Adam"
   num_layers: 2
   activation: "relu"
-  multirun: 5
+  multirun: 3
   feat_norm: False
   synth: False
   scale: 1

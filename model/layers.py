@@ -202,9 +202,10 @@ class AttentionModule(torch.nn.Module):
 
 class TensorNetworkModule(torch.nn.Module):
 
-    def __init__(self, config, filters):
+    def __init__(self, config, filters, tensor_neurons):
 
         super(TensorNetworkModule, self).__init__()
+        self.tensor_neurons = tensor_neurons
         self.config = config
         self.filters = filters
         self.setup_weights()
@@ -214,13 +215,13 @@ class TensorNetworkModule(torch.nn.Module):
 
         self.weight_matrix = torch.nn.Parameter(
             torch.Tensor(
-                self.filters, self.filters, self.config['tensor_neurons']
+                self.filters, self.filters, self.tensor_neurons
             )
         )
         self.weight_matrix_block = torch.nn.Parameter(
-            torch.Tensor(self.config['tensor_neurons'], 2 * self.filters)
+            torch.Tensor(self.tensor_neurons, 2 * self.filters)
         )
-        self.bias = torch.nn.Parameter(torch.Tensor(self.config['tensor_neurons'], 1))
+        self.bias = torch.nn.Parameter(torch.Tensor(self.tensor_neurons, 1))
 
     def init_parameters(self):
 
