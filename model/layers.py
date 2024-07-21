@@ -202,10 +202,13 @@ class AttentionModule(torch.nn.Module):
 
 class TensorNetworkModule(torch.nn.Module):
 
-    def __init__(self, config, filters, tensor_neurons):
+    def __init__(self, config, filters, tensor_neurons=None):
 
         super(TensorNetworkModule, self).__init__()
-        self.tensor_neurons = tensor_neurons
+        if tensor_neurons is not None:
+            self.tensor_neurons = tensor_neurons
+        else:
+            self.tensor_neurons = config['tensor_neurons']
         self.config = config
         self.filters = filters
         self.setup_weights()
