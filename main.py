@@ -48,7 +48,7 @@ def main(args, config, logger: Logger, run_id: int, dataset: DatasetLocal, date,
         log_i                        = 0
     for epoch in pbar:
         if not custom:
-            batches                  = dataset.create_batches(config)   # 128对 graph-pair
+            batches                  = dataset.create_batches_all(config)   # 128对 graph-pair
 
         else:
             batch_feature_1, batch_adj_1, batch_mask_1, batch_feature_2, batch_adj_2, batch_mask_2, batch_ged = dataset.custom_dataset.get_training_batch()
@@ -68,6 +68,8 @@ def main(args, config, logger: Logger, run_id: int, dataset: DatasetLocal, date,
             if config['schedule_start'] == -1:
                 p                    = 1.0
             p = 2. / (1. + np.exp(-10 * p)) - 1
+            if epoch % 2 == 0:
+                data["g1"], data["g2"] = data["g2"], data["g1"]
             model, loss, loss_cl, loss_compre, loss_pripre \
                                      = T.train(data, model, loss_func, optimizer, target, p)                 
             loss_sum                 = loss_sum + loss
@@ -79,15 +81,6 @@ def main(args, config, logger: Logger, run_id: int, dataset: DatasetLocal, date,
                 writer               .add_scalar('loss/loss_cl', loss_cl, log_i)
                 writer               .add_scalar('loss/loss_compre', loss_compre, log_i)
                 writer               .add_scalar('loss/loss_pripre', loss_pripre, log_i)
-                writer               .add_scalar('sim/com', model.sim_com_log, log_i)
-                writer               .add_scalar('sim/pri', model.dis_pri_log, log_i)
-                writer               .add_scalar('sim/sim_pri1', model.sim_pri1_log, log_i)
-                writer               .add_scalar('sim/sim_pri2', model.sim_pri2_log, log_i)
-                writer               .add_scalar('sim/dis_cg1', model.dis_cg1_log, log_i)
-                writer               .add_scalar('sim/dis_cg2', model.dis_cg2_log, log_i)
-                writer               .add_scalar('sim/dis_mean_cp1', model.dis_mean_cp1_log, log_i)
-                writer               .add_scalar('sim/dis_mean_cp2', model.dis_mean_cp2_log, log_i)
-                # model                .log_param(writer, log_i)
                 log_i                = log_i + 1
         loss                         = loss_sum / main_index                              
         loss_cl                      = losscl_sum / main_index
@@ -228,7 +221,7 @@ if __name__ == "__main__":
     parser.add_argument('--no_dev',          action = "store_true" ,  default = False)
     parser.add_argument('--patience',          type = int  ,          default = -1)
     parser.add_argument('--gpu_id',            type = int  ,          default = 2)
-    parser.add_argument('--model',             type = str,            default ='GSC_GNN')  # GCN, GAT or other
+    parser.add_argument('--model',             type = str,            default ='CPRGsim')  # GCN, GAT or other
     parser.add_argument('--train_first',       type = bool,           default = True)
     parser.add_argument('--save_model',        type = bool,           default = False)
     parser.add_argument('--run_pretrain',    action ='store_true',    default = False)
@@ -264,6 +257,7 @@ if __name__ == "__main__":
     print_config(config)
     all_org_wei                  = []
     all_gen_wei                  = []
+    results_list                 = []
     if args.run_pretrain:
         pretrain_model           = GSC(config, dataset.input_dim).cuda()
         pretrain_model_para      = osp.join(args.pretrain_path, 'GSC_GNN_{}_checkpoint.pth'.format(args.dataset))
@@ -296,6 +290,25 @@ if __name__ == "__main__":
                 'prec_at_10': report_prec_at_10_test,
                 'prec_at_20': report_prec_at_20_test
             }
+            results_list.append(test_results)
+            if run_id == config['multirun']-1:
+                average_results = {
+                    'mse'       : 0,
+                    'rho'       : 0,
+                    'tau'       : 0,
+                    'prec_at_10': 0,
+                    'prec_at_20': 0 }
+                for j in range(config['multirun']):
+                    average_results['mse'] += results_list[j]['mse']
+                    average_results['rho'] += results_list[j]['rho']
+                    average_results['tau'] += results_list[j]['tau']
+                    average_results['prec_at_10'] += results_list[j]['prec_at_10']
+                    average_results['prec_at_20'] += results_list[j]['prec_at_20']
+                average_results['mse'] /= config['multirun']
+                average_results['rho'] /= config['multirun']
+                average_results['tau'] /= config['multirun']
+                average_results['prec_at_10'] /= config['multirun']
+                average_results['prec_at_20'] /= config['multirun']
             with open(osp.join(PATH_MODEL, 'result.txt'), 'w') as f:
                 f.write('\n')
                 for k, v       in   best_val_results.items():
@@ -303,7 +316,10 @@ if __name__ == "__main__":
                 f.write('\n')
                 for key, value in   test_results.items():
                     f.write('%s: %s\n'         % (key, value))
-
+                if run_id == config['multirun']-1:
+                    f.write('\n')
+                    for key, value in   average_results.items():
+                        f.write('%s: %s\n'         % (key, value))                    
             if args.save_model:
                 save_model(config, args.dataset, model)
 

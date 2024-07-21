@@ -3,7 +3,7 @@ from statistics import mode
 import numpy as np
 from rich import print
 from model.GSC import GSC
-from model.DiffDecouple import DiffDecouple
+from model.CPRGsim import CPRGsim
 from argparse import ArgumentParser
 from utils.utils import *
 from utils.vis import vis_small
@@ -27,6 +27,7 @@ import matplotlib.pyplot as plt
 from collections import OrderedDict, defaultdict
 import os.path as osp
 TRUE_MODEL = 'astar'
+from scipy.stats import spearmanr, kendalltau
 
 @torch.no_grad()
 def evaluate(testing_graphs, training_graphs, model, dataset: DatasetLocal, config, emb_log=True):
@@ -48,6 +49,11 @@ def evaluate(testing_graphs, training_graphs, model, dataset: DatasetLocal, conf
         for n in ['g1', 'g2']:
             node_embs_dicts[i_filter][n] = list()
 
+    rho_list                       = []
+    tau_list                       = []
+    prec_at_10_list                = []
+    prec_at_20_list                = []
+
     num_test_pairs                 = len(testing_graphs) * len(training_graphs)
     t                              = tqdm(total=num_test_pairs)
 
@@ -68,6 +74,26 @@ def evaluate(testing_graphs, training_graphs, model, dataset: DatasetLocal, conf
         prediction_mat[i]          = prediction.cpu().detach().numpy()
         scores[i]                  = ( F.mse_loss(prediction.cpu().detach(), target, reduction="none").numpy())
 
+        rho_list.append(
+            calculate_ranking_correlation(
+                spearmanr, prediction_mat[i], ground_truth[i]
+            )
+        )
+        tau_list.append(
+            calculate_ranking_correlation(
+                kendalltau, prediction_mat[i], ground_truth[i]
+            )
+        )
+        prec_at_10_list.append(
+            calculate_prec_at_k(
+                10, prediction_mat[i], ground_truth[i], ground_truth_ged[i]
+            )
+        )
+        prec_at_20_list.append(
+            calculate_prec_at_k(
+                20, prediction_mat[i], ground_truth[i], ground_truth_ged[i]
+            )
+        )
         # if type(model.c_distri_list) is list:
         #     c_distri_list = [model.c_distri_list[i].cpu().detach().numpy() for i in range(model.num_filter)]
         # else:
@@ -84,8 +110,24 @@ def evaluate(testing_graphs, training_graphs, model, dataset: DatasetLocal, conf
                 node_embs_dicts[i_filter]['g2'].append((model.nod2_list[i_filter][0].cpu().detach().numpy(), model.nod2_list[i_filter][1].cpu().detach().numpy()))
         t.update(len(training_graphs))
 
-    return scores, ground_truth, ground_truth_ged, ground_truth_nged, prediction_mat, graph_embs_dicts, node_embs_dicts, graph_cdistri_dicts
+    rho                            = np.mean(rho_list).item()
+    tau                            = np.mean(tau_list).item()
+    prec_at_10                     = np.mean(prec_at_10_list).item()
+    prec_at_20                     = np.mean(prec_at_20_list).item()
+    model_mse_error                = np.mean(scores).item()
+    def print_evaluation(model_mse,test_rho,test_tau,test_prec_at_10,test_prec_at_20):
+        """
+        Printing the error rates.
+        """
+        print("\nmse(10^-3): "   + str(round(model_mse * 1000, 5)) + ".")
+        print("Spearman's rho: " + str(round(test_rho, 5)) + ".")
+        print("Kendall's tau: "  + str(round(test_tau, 5)) + ".")
+        print("p@10: "           + str(round(test_prec_at_10, 5)) + ".")
+        print("p@20: "           + str(round(test_prec_at_20, 5)) + ".")
+    print_evaluation(model_mse_error, rho, tau, prec_at_10, prec_at_20)   
 
+    return scores, ground_truth, ground_truth_ged, ground_truth_nged, prediction_mat, graph_embs_dicts, node_embs_dicts, graph_cdistri_dicts
+    
 def loss_sim_distribution(scores, ground_truth_ged, ground_truth, prediction_mat):
     ged_max = int(np.max(ground_truth_ged))
     ged_min = int(np.min(ground_truth_ged))
@@ -103,11 +145,13 @@ def loss_sim_distribution(scores, ground_truth_ged, ground_truth, prediction_mat
     nged = []
     nloss = []
     nstep = 20
+    findnumlist = []
     step = (nged_max - nged_min)/nstep
 
     for i in range(nstep):
         find = np.where((ground_truth>=i*step) & (ground_truth<(i+1)*step), scores, 0.0)
         find_num = len(np.nonzero(find)[0])
+        findnumlist.append(find_num)
         find_average = find.sum()/find_num
         nged.append('{:.1f}-{:.1f}/{}'.format(i*step, (i+1)*step, find_num))
         nloss.append(find_average)
@@ -150,7 +194,42 @@ def loss_sim_distribution(scores, ground_truth_ged, ground_truth, prediction_mat
     ax.set_title('{:.5f} gt related to the distribution of GED'.format(scores.mean()))
     
     save_fig(plt, osp.join('img', mode_dir, exp_figure_name), 'pre_distribution')
+    plt.close()
 
+    fig, (ax_ged, ax_nged) = plt.subplots(1, 2, figsize=(14.4, 4.8))
+
+    ax_ged.bar(nged, findnumlist, width=0.5)
+    ax_ged.tick_params(axis='x', labelrotation=90)
+    ax_ged.set_ylabel('GED average')
+    ax_ged.set_xlabel('ged/num')
+    ax_ged.set_title('GED distribution')
+
+    ax_nged.bar(nged, nloss, width=0.5)
+    ax_nged.tick_params(axis='x', labelrotation=90)
+    ax_nged.set_ylabel('loss average')
+    ax_nged.set_xlabel('nged/num')
+    ax_nged.set_title('loss distribution')
+
+    save_fig(plt, osp.join('img', mode_dir, exp_figure_name), 'GED_loss_distribution')
+    plt.close()
+
+def GED_distribution(ground_truth):
+    fig, (ax_1, ax_2) = plt.subplots(1, 2)
+
+    ax_1.hist(ground_truth.flatten(), 50)
+    ax_1.set_xlabel('similarity')
+    ax_1.set_title('testdatabase similarity distribution')
+
+    train_nged_list = dataset.trainval_nged_matrix[0:len(dataset.training_graphs), 0:len(dataset.training_graphs)].cpu().detach().numpy().flatten()
+    ax_2.hist(np.exp(-train_nged_list), 50)
+    ax_2.set_title('traindatabase similarity distribution')
+    _, mode_dir = osp.split(args.pretrain_path)
+    exp_figure_name = 'sim_distribution'
+
+    save_fig(plt, osp.join('img', mode_dir, exp_figure_name), 'sim_distribution')
+    plt.tight_layout()
+    plt.close()
+    
 def compri_dist_l2(ground_truth_ged, graph_embs_dicts, dataset):
     len_trival                     = len(dataset.trainval_graphs)
     sort_id_mat                    = np.argsort(ground_truth_ged,  kind = 'mergesort')
@@ -455,10 +534,10 @@ def compri_sim_distribution(ground_truth_ged, graph_embs_dicts):
         save_fig(plt, dir_, img_name)
         plt.close()
 
-def emb_hist_heat(prediction_mat, graph_embs_dicts, node_embs_dicts):
+def nodecp_sim_matrix_hist_heat(prediction_mat, graph_embs_dicts, node_embs_dicts):
     sort_id_mat_pre = np.argsort(prediction_mat,  kind = 'mergesort')[:, ::-1]
     gidraw = [0, 1, 2, 3, 4, 5, 6, 7, 8 ,9 , 10 ,11,22, 21, 76,64]
-    rankcol = [10,]  
+    rankcol = [1,]  
     filter_list = [0,1,2,3]
 
     for i_filter in filter_list:
@@ -491,7 +570,12 @@ def emb_hist_heat(prediction_mat, graph_embs_dicts, node_embs_dicts):
                 heatmap(g1n2_cos_matrix, ['C1', 'P1'], None, ax=g1n2_ax, cmap="YlGn")
                 heatmap(n1n2_cos_matrix, ["G%i"% i for i in range(len(node1_emb))], ["g%i"% i for i in range(len(node2_emb))], ax=n1n2_ax, cmap="YlGn",)
                 # fig.tight_layout()
-                save_fig(plt, 'img', 'c')
+                _, mode_dir = osp.split(args.pretrain_path)
+                exp_figure_name = 'sim_matrix_hist_heat'
+                dir_ = osp.join('img', mode_dir, exp_figure_name)
+                img_name = '{}_{}_filter_{}'.format(test_id, traval_id, i_filter)
+
+                save_fig(plt, dir_, img_name)
                 plt.close()
 
 def heatmap(data, row_labels, col_labels, ax=None,
@@ -1182,7 +1266,7 @@ if __name__ == "__main__":
 
     dataset                     = load_data(args, False)
     dataset                     . load(config)
-    model                       = DiffDecouple(config, dataset.input_dim).cuda()
+    model                       = CPRGsim(config, dataset.input_dim).cuda()
     para                        = osp.join(args.pretrain_path, 'GSC_GNN_{}_checkpoint_mse.pth'.format(args.dataset))
     model                       . load_state_dict(torch.load(para))
     model                       . eval()
@@ -1196,14 +1280,5 @@ if __name__ == "__main__":
     node_embs_dicts,               \
     graph_cdistri_dicts            = evaluate(dataset.testing_graphs, dataset.trainval_graphs, model, dataset, config)
 
-    # compri_sim_distribution(dataset.testing_graphs, dataset.trainval_graphs, model, dataset, config, args)
-    # compri_distri_distribution(scores, ground_truth, graph_cdistri_dicts)
-    # loss_sim_distribution(scores, ground_truth_ged, ground_truth)
-    # compri_sim_distribution(ground_truth_ged, graph_embs_dicts)
-    # loss_sim_distribution(scores, ground_truth_ged, ground_truth, prediction_mat)
-    emb_hist(ground_truth_ged, graph_embs_dicts)
-    # compri_distri_distribution(scores, ground_truth, graph_cdistri_dicts)
-    # compri_dist_l2(ground_truth_ged, graph_embs_dicts, dataset)
-    # compri_dist_l2(dataset.testing_graphs, dataset.trainval_graphs, model, dataset, config, args)
-    # visualize_embeddings_gradual(args, dataset.testing_graphs, dataset.trainval_graphs, model)
+    nodecp_sim_matrix_hist_heat(prediction_mat, graph_embs_dicts, node_embs_dicts)
 
