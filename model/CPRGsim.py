@@ -520,8 +520,12 @@ class CP_Generator(nn.Module):
             pool_1 = self._pool(deepsets_inner_1, batch1)
             pool_2 = self._pool(deepsets_inner_2, batch2)
 
-            att_1with_2 = self.n2gatt(deepsets_inner_1, pool_2, batch1)
-            att_2with_1 = self.n2gatt(deepsets_inner_2, pool_1, batch2)
+            if self.config.get('ngsa', True):
+                att_1with_2 = self.n2gatt(deepsets_inner_1, pool_2, batch1)
+                att_2with_1 = self.n2gatt(deepsets_inner_2, pool_1, batch2)
+            else:
+                att_1with_2 = pool_2
+                att_2with_1 = pool_1
         elif self.config['graph_encoder'] == 'GCA':
             pool_1 = self.deepset_inner[filter_idx](x1, batch1)
             pool_2 = self.deepset_inner[filter_idx](x2, batch2)
