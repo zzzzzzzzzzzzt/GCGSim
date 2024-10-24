@@ -25,7 +25,7 @@ CPRGsim:
   feat_norm: False
   synth: False
   scale: 1
-  show_last: False   
+  show_last: False     
 
   gnn_encoder: "GIN"
   graph_encoder: 'deepset'    
@@ -85,3 +85,4 @@ CPRGsim:
   rho_weight: 1.0
   schedule_start: -1
   detach: False
+  ngsa: True

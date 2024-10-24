@@ -80,3 +80,4 @@ CPRGsim:
   rho_weight: 1.0
   schedule_start: -1
   detach: False
+  ngsa: True
