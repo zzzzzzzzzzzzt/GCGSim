@@ -3,7 +3,7 @@ dataset: "IMDBMulti"
 model_name: "CPRGsim"
 
 CPRGsim:
-  epochs: 50
+  epochs: 10
   use_val: True
   val_ratio: 0.25
   iter_val_start: 1
