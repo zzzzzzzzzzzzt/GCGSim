@@ -1,6 +1,5 @@
 from distutils.command.config import config
 from platform import node
-from turtle import forward
 from gpustat import print_gpustat
 import torch
 import torch.nn as nn
@@ -11,7 +10,6 @@ from model.layers import AttentionModule, MLPLayers, TensorNetworkModule, FF, Gl
 from utils.gan_losses import get_negative_expectation, get_positive_expectation
 from collections import OrderedDict, defaultdict
 import numpy as np
-from torchmetrics.regression import PearsonCorrCoef
 from functools import partial
 from typing import Any, Optional, Tuple
 import random
@@ -142,7 +140,7 @@ class CP_Generator(nn.Module):
         self.config                 = config
         self.batchsize              = self.config['batch_size']
         self.n_feat                 = n_feat
-        self.pearsoncorrcoef        = PearsonCorrCoef(self.config['batch_size'])
+        # self.pearsoncorrcoef        = PearsonCorrCoef(self.config['batch_size'])
         self.emb_log                = False
         self.setup_layers()
     

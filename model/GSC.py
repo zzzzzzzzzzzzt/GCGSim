@@ -1,6 +1,5 @@
 from distutils.command.config import config
 from platform import node
-from turtle import forward
 from gpustat import print_gpustat
 import torch
 import torch.nn as nn

@@ -1,4 +1,3 @@
-from turtle import forward
 import torch
 import torch.nn as nn
 from torch_geometric.nn import GCNConv, GINConv, GATConv

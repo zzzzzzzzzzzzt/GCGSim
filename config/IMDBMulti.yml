@@ -71,7 +71,7 @@ CPRGsim:
 
   clip_grad: False
   num_works: 10
-  board_log: True
+  board_log: False
   reconstruction: False
   sim_rat: True
   noise: True

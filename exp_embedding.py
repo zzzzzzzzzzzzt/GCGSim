@@ -1,7 +1,7 @@
 from re import S
 from statistics import mode
 import numpy as np
-from rich import print
+# from rich import print
 from model.GSC import GSC
 from model.CPRGsim import CPRGsim
 from argparse import ArgumentParser
@@ -1251,7 +1251,7 @@ if __name__ == "__main__":
     parser.add_argument('--gpu_id',            type = int  ,            default = 0)
     parser.add_argument('--model',             type = str,              default = 'GSC_GNN')  # GCN, GAT or other
     parser.add_argument('--recache',         action = "store_true",        help = "clean up the old adj data", default=True)
-    parser.add_argument('--pretrain_path',     type = str,              default = 'model_saved/IMDBMulti/2024-06-16/FFNGIN_IMDBMulti_sum_0')
+    parser.add_argument('--pretrain_path',     type = str,              default = 'model_saved/IMDBMulti/2024-10-30/CPRGsim_IMDBMulti_woNGSA_0')
     args = parser.parse_args()
     # import os
     # os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
@@ -1267,7 +1267,7 @@ if __name__ == "__main__":
     dataset                     = load_data(args, False)
     dataset                     . load(config)
     model                       = CPRGsim(config, dataset.input_dim).cuda()
-    para                        = osp.join(args.pretrain_path, 'GSC_GNN_{}_checkpoint_mse.pth'.format(args.dataset))
+    para                        = osp.join(args.pretrain_path, 'CPRGsim_{}_checkpoint_mse.pth'.format(args.dataset))
     model                       . load_state_dict(torch.load(para))
     model                       . eval()
 
@@ -1278,7 +1278,7 @@ if __name__ == "__main__":
     prediction_mat,                \
     graph_embs_dicts,              \
     node_embs_dicts,               \
-    graph_cdistri_dicts            = evaluate(dataset.testing_graphs, dataset.trainval_graphs, model, dataset, config)
+    graph_cdistri_dicts            = evaluate(dataset.testing_graphs, dataset.trainval_graphs, model, dataset, config, False)
 
-    nodecp_sim_matrix_hist_heat(prediction_mat, graph_embs_dicts, node_embs_dicts)
+    # nodecp_sim_matrix_hist_heat(prediction_mat, graph_embs_dicts, node_embs_dicts)
 

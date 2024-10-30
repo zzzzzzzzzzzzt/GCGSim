@@ -1,8 +1,6 @@
-import imp
 import os.path as osp
 from argparse import ArgumentParser
 import sys
-from tkinter import Pack
 from tqdm import tqdm
 import torch
 import random
