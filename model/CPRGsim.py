@@ -100,14 +100,20 @@ class Discriminator(nn.Module):
             self.c_NTN_list = nn.ModuleList()
             self.p_NTN_list = nn.ModuleList()     
         for i in range(self.num_filter):
-            if self.config['cat_NTN']:
-                self.NTN_list.append(TensorNetworkModule(self.config, 2*self.filters[i], self.filters[i]))
+            if not self.config['neurons']:
+                neurons = self.config['tensor_neurons']
+                hiden_neurons = neurons*self.config['NTN_layers']
             else:
-                self.c_NTN_list.append(TensorNetworkModule(self.config, self.filters[i], self.filters[i]))
-                self.p_NTN_list.append(TensorNetworkModule(self.config, self.filters[i], self.filters[i]))
-        self.score_sim_layer = nn.Sequential(nn.Linear(2*sum(self.filters), sum(self.filters)),
+                neurons = self.filters[i]
+                hiden_neurons = sum(self.filters)
+            if self.config['cat_NTN']:
+                self.NTN_list.append(TensorNetworkModule(self.config, 2*self.filters[i], neurons))
+            else:
+                self.c_NTN_list.append(TensorNetworkModule(self.config, self.filters[i], neurons))
+                self.p_NTN_list.append(TensorNetworkModule(self.config, self.filters[i], neurons))
+        self.score_sim_layer = nn.Sequential(nn.Linear(2*hiden_neurons, hiden_neurons),
                                              nn.ReLU(),
-                                             nn.Linear(sum(self.filters), self.config['tensor_neurons']),
+                                             nn.Linear(hiden_neurons, self.config['tensor_neurons']),
                                              nn.ReLU(),
                                              nn.Linear(self.config['tensor_neurons'] , 1)) 
                

@@ -3,7 +3,7 @@ dataset: "IMDBMulti"
 model_name: "CPRGsim"
 
 CPRGsim:
-  epochs: 10
+  epochs: 50
   use_val: True
   val_ratio: 0.25
   iter_val_start: 1
@@ -86,3 +86,4 @@ CPRGsim:
   schedule_start: -1
   detach: False
   ngsa: True
+  neurons: False

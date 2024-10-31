@@ -72,6 +72,7 @@ CPRGsim:
   schedule_start: -1
   detach: False
   ngsa: True
+  neurons: False
 
 SimGNN:
   patience: -1
