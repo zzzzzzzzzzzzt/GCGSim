@@ -87,3 +87,4 @@ CPRGsim:
   detach: False
   ngsa: True
   neurons: False
+  psatype: 'cos'

@@ -36,8 +36,16 @@ class CPRGsim(nn.Module):
         return score, None
 
     def get_sim_rat(self, pool_1, pool_2):
-        com_distri = [F.cosine_similarity(pool_1[i], pool_2[i], dim=-1).unsqueeze(-1) for i in range(self.num_filter)]
-        pri_distri = [1 - com_distri[i] for i in range(self.num_filter)]
+        if self.config['psatype'] == 'cos':
+            com_distri = [F.cosine_similarity(pool_1[i], pool_2[i], dim=-1).unsqueeze(-1) for i in range(self.num_filter)]
+            pri_distri = [1 - com_distri[i] for i in range(self.num_filter)]
+        else:
+            priori_sim = [torch.einsum('ij,ij->i', pool_1[i], pool_2[i]).unsqueeze(-1) for i in range(self.num_filter)]
+            if self.config['psatype'] == 'exp':
+                pri_distri = [torch.exp(-priori_sim[i]) for i in range(self.num_filter)]
+            elif self.config['psatype'] == 'tanh':
+                pri_distri = [1-torch.tanh(priori_sim[i]) for i in range(self.num_filter)]
+            com_distri = [1 - priori_sim[i] for i in range(self.num_filter)]
         return com_distri, pri_distri
     
     def _feature_distri(self, com_1, com_2, pri_1, pri_2, com_distri, pri_distri):

@@ -66,7 +66,7 @@ CPRGsim:
 
   clip_grad: False
   num_works: 10
-  board_log: True
+  board_log: False
   reconstruction: False
   sim_rat: True
   noise: True
@@ -82,3 +82,4 @@ CPRGsim:
   detach: False
   ngsa: True
   neurons: False
+  psatype: 'cos'

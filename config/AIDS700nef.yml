@@ -57,7 +57,7 @@ CPRGsim:
   model_name: 'GSC_GNN'
   dataset_name: 'AIDS700nef'
   sep: False
-  board_log: True
+  board_log: False
   reconstruction: False
   sim_rat: True
   noise: True
@@ -73,6 +73,7 @@ CPRGsim:
   detach: False
   ngsa: True
   neurons: False
+  psatype: 'cos'
 
 SimGNN:
   patience: -1
