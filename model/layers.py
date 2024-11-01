@@ -346,14 +346,14 @@ class LayerNorm(torch.nn.Module):
     
 class FFNGIN(nn.Module):
     # * graph_level_type = ['gap','gmp','gm']
-    def __init__(self, in_channels, gnn_type, pGin=False):
+    def __init__(self, in_channels, out_channels, gnn_type, pGin=False):
         super(FFNGIN, self).__init__()
         self.pGin = pGin
         if gnn_type == 'gin':
-            self.nns = nn.Linear(in_channels, in_channels)
+            self.nns = nn.Linear(in_channels, out_channels)
             self.gnn_layers = Sequential('x,edge_index,batch', [
                 (GINConv(self.nns, eps=True), 'x,edge_index -> x'),
-                (LayerNorm(in_channels), 'x,batch -> x'),
+                (LayerNorm(out_channels), 'x,batch -> x'),
                 nn.ReLU(inplace=True)
             ])
         elif gnn_type == 'gcn':

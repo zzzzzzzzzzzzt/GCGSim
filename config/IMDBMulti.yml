@@ -27,7 +27,7 @@ CPRGsim:
   scale: 1
   show_last: False     
 
-  gnn_encoder: "GIN"
+  gnn_encoder: "FFNGIN"
   graph_encoder: 'deepset'    
   multi_contrast: False
   gnn_filters: [64, 64, 32, 16]

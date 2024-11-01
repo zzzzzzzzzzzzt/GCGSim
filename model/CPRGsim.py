@@ -208,8 +208,9 @@ class CP_Generator(nn.Module):
             ), eps=True))
         elif self.gnn_enc           == 'FFNGIN':
             self.embedding = nn.Linear(self.n_feat, self.filters[0])
-            for i in range(self.num_filter):
-                self.gnn_list.append(FFNGIN(self.filters[i], 'gin'))
+            self.gnn_list.append(FFNGIN(self.filters[0], self.filters[0], 'gin', True))
+            for i in range(self.num_filter-1):
+                self.gnn_list.append(FFNGIN(self.filters[i], self.filters[i+1], 'gin', True))
         else:
             raise NotImplementedError("Unknown GNN-Operator.")
             
