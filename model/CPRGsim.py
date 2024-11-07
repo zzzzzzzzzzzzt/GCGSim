@@ -36,7 +36,7 @@ class CPRGsim(nn.Module):
         return score, None
 
     def get_sim_rat(self, pool_1, pool_2):
-        if self.config['psatype'] == 'cos':
+        if self.config.get('psatype', 'cos') == 'cos':
             com_distri = [F.cosine_similarity(pool_1[i], pool_2[i], dim=-1).unsqueeze(-1) for i in range(self.num_filter)]
             pri_distri = [1 - com_distri[i] for i in range(self.num_filter)]
         else:
@@ -108,7 +108,7 @@ class Discriminator(nn.Module):
             self.c_NTN_list = nn.ModuleList()
             self.p_NTN_list = nn.ModuleList()     
         for i in range(self.num_filter):
-            if not self.config['neurons']:
+            if not self.config.get('neurons', False):
                 neurons = self.config['tensor_neurons']
                 hiden_neurons = neurons*self.config['NTN_layers']
             else:
