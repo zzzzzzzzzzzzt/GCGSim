@@ -1037,11 +1037,11 @@ def visualize_embeddings_binary(args, testing_graphs, trainval_graphs, model: GS
         print('Saved {} embedding visualization plots'.format(plt_cnt))
 
 
-def get_text_label_for_ranking(ds_metric, qid, gid, norm, is_query, dataset,
+def get_text_label_for_ranking(ds_metric, qid, j, norm, is_query, dataset,
                                gids_groundtruth, plot_gids, normed_matrix, unnormed_matrix):
     # norm = True
     rtn = ''
-
+    gid = gids_groundtruth[j]
     if ds_metric == 'ged':  # here
         if norm:
             ds_label = 'nGED'
@@ -1071,10 +1071,18 @@ def get_text_label_for_ranking(ds_metric, qid, gid, norm, is_query, dataset,
         ged_sim        = normed_matrix[qid][gid]  # q 和g 的预测nged
         if ds_str == 'ged':
             ged_str = get_ged_select_norm_str(unnormed_matrix, normed_matrix, qid, gid, norm)
-            if gid != gids_groundtruth[5]:
-                rtn += '\n {}'.format(ged_str.split('(')[0])
+            if j == len(gids_groundtruth) - 3:
+                rtn = '\n ... rank {} ...\n{}'.format(int(len(unnormed_matrix[0]) / 2), ged_str.split('(')[0])
+            elif j == len(gids_groundtruth) - 2:
+                rtn = '\n rank {}\n{}'.format(int(len(unnormed_matrix[0])-1), ged_str.split('(')[0])
+            elif j == len(gids_groundtruth) - 1:
+                rtn = '\n rank {}\n{}'.format(int(len(unnormed_matrix[0])), ged_str.split('(')[0])
             else:
-                rtn += '\n ...   {}   ...'.format(ged_str.split('(')[0])
+                rtn = '\n rank {}\n{}'.format(str(j + 1), ged_str.split('(')[0])
+            # if gid != gids_groundtruth[5]:
+            #     rtn += '\n {}'.format(ged_str.split('(')[0])
+            # else:
+            #     rtn += '\n ...   {}   ...'.format(ged_str.split('(')[0])
         else:
             rtn += '\n {:.2f}'.format(ged_sim)  # in case it is a numpy.float64, use float()
     if plot_gids:
@@ -1180,25 +1188,25 @@ def draw_ranking(args, testing_graphs, trainval_graphs, pred_mat , pred_mat_unex
         # Create the plot labels.
         text = []
         # First label is the name of the groundtruth algorithm, rest are scores for the graphs.
-        text += [get_text_label_for_ranking('ged', i, i, True, True, args.dataset, gids_groundtruth, plot_gids, ground_truth_nged, ground_truth_ged)]
+        text.append('Query')# text += [get_text_label_for_ranking('ged', i, i, True, True, args.dataset, gids_groundtruth, plot_gids, ground_truth_nged, ground_truth_ged)]
         text += [get_text_label_for_ranking(
                             'ged', i, j, True, False, args.dataset, gids_groundtruth, plot_gids, ground_truth_nged, ground_truth_ged)
-                            for j in gids_groundtruth]
+                            for j in range(len(gids_groundtruth))]
         # Start bottom row labels, just ranked from 1 to N with some fancy formatting.
-        granu_label = 'similarity'.title() if verbose else 'Rank'
-        text.append("{} \n {} by {}".format(granu_label, 'Rank', args.model_name))
+        # granu_label = 'similarity'.title() if verbose else 'Rank'
+        text.append('Query') # text.append("{} \n {} by {}".format(granu_label, 'Rank', args.model_name))
         for j in range(len(gids_rank)):
             # ds = format_ds(pred_r.pred_ds(i, gids_rank[j], ds_norm))
             ds = -1 * np.log(pred_mat[i][gids_rank[j]])
             optional = '\n{:.2f}'.format(ds) if verbose else ''
             if j == len(gids_rank) - 3:
-                rtn = '\n ...   {}   ...{}'.format(int(len(trainval_graphs) / 2), optional)
+                rtn = '\n ... rank {} ...{}'.format(int(len(trainval_graphs) / 2), optional)
             elif j == len(gids_rank) - 2:
-                rtn = '\n {}{}'.format(int(len(trainval_graphs)-1), optional)
+                rtn = '\n rank {}{}'.format(int(len(trainval_graphs)-1), optional)
             elif j == len(gids_rank) - 1:
-                rtn = '\n {}{}'.format(int(len(trainval_graphs)), optional)
+                rtn = '\n rank {}{}'.format(int(len(trainval_graphs)), optional)
             else:
-                rtn = '\n {}{}'.format(str(j + 1), optional)
+                rtn = '\n rank {}{}'.format(str(j + 1), optional)
             # rtn = '\n {}: {:.2f}'.format('sim', pred_r.sim_mat_[i][j])
             text.append(rtn)       
         # Perform the visualization.
@@ -1216,7 +1224,7 @@ def draw_ranking(args, testing_graphs, trainval_graphs, pred_mat , pred_mat_unex
 
 
 def get_color_map(gs, trainval_graphs, use_color = True):
-    fl = len(FAVORITE_COLORS)
+    fl = len(SET_COLORS)
     rtn = {}
     ntypes = defaultdict(int) 
     types = trainval_graphs.types
@@ -1235,10 +1243,10 @@ def get_color_map(gs, trainval_graphs, use_color = True):
         elif i >= fl:
             cmaps = plt.cm.get_cmap('hsv')
             color = cmaps((i - fl) / (len(ntypes) - fl))
-            secondary[ntype] = color if use_color else mcolors.to_rgba('#CCCCCC')
+            secondary[ntype] = color if use_color else mcolors.to_rgba(SET_COLORS[0])
         else:
-            color = mcolors.to_rgba(FAVORITE_COLORS[i])[:3]
-            rtn[ntype] = color if use_color else mcolors.to_rgba('#CCCCCC')
+            color = mcolors.to_rgba(SET_COLORS[i])[:3]
+            rtn[ntype] = color if use_color else mcolors.to_rgba(SET_COLORS[0])
     if secondary:
         rtn.update((secondary))
     return rtn
@@ -1249,7 +1257,7 @@ if __name__ == "__main__":
     parser.add_argument('--data_dir',          type = str,              default = 'datasets/')
     parser.add_argument('--extra_dir',         type = str,              default = 'exp/')    
     parser.add_argument('--gpu_id',            type = int  ,            default = 0)
-    parser.add_argument('--model',             type = str,              default = 'GSC_GNN')  # GCN, GAT or other
+    parser.add_argument('--model_name',             type = str,              default = 'GSC_GNN')  # GCN, GAT or other
     parser.add_argument('--recache',         action = "store_true",        help = "clean up the old adj data", default=True)
     parser.add_argument('--pretrain_path',     type = str,              default = 'model_saved/IMDBMulti/2024-10-30/CPRGsim_IMDBMulti_woNGSA_0')
     args = parser.parse_args()
@@ -1282,3 +1290,4 @@ if __name__ == "__main__":
 
     # nodecp_sim_matrix_hist_heat(prediction_mat, graph_embs_dicts, node_embs_dicts)
 
+    draw_ranking(args, dataset.testing_graphs, dataset.trainval_graphs, prediction_mat, None, model_path='', plot_node_ids=False)
