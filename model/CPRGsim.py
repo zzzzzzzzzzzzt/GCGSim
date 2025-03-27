@@ -66,6 +66,20 @@ class CPRGsim(nn.Module):
         com_1, com_2, pri_1, pri_2 = self._feature_distri(com_1, com_2, pri_1, pri_2, com_distri, pri_distri)
         return com_1, com_2, pri_1, pri_2
 
+    def collect_embeddings(self, all_graphs):
+        node_embs_dict = dict()  
+        for g in all_graphs:
+            feat = g.x.cuda()
+            edge_index = g.edge_index.cuda()
+            feat = self.cp_generator.embedding(feat)
+            for i, gnn in enumerate(self.cp_generator.gnn_list):
+                if i not in node_embs_dict.keys():
+                    node_embs_dict[i] = dict()
+                feat = gnn(feat, edge_index)  
+                feat = F.relu(feat)        
+                node_embs_dict[i][int(g['i'])] = feat
+        return node_embs_dict
+
 class CPRGsim_ex(CPRGsim):
     def __init__(self, config, n_feat, ex_emb):
         self.ex_emb = ex_emb

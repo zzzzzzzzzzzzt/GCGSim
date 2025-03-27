@@ -69,7 +69,7 @@ def evaluate(testing_graphs, training_graphs, model, dataset: DatasetLocal, conf
         target_nged                = data["norm_ged"]
         ground_truth_nged[i]       = target_nged
 
-        model.emb_log              = emb_log
+        model.cp_generator.emb_log = emb_log
         prediction, loss_cl        = model(data)
         prediction_mat[i]          = prediction.cpu().detach().numpy()
         scores[i]                  = ( F.mse_loss(prediction.cpu().detach(), target, reduction="none").numpy())
@@ -102,12 +102,12 @@ def evaluate(testing_graphs, training_graphs, model, dataset: DatasetLocal, conf
 
         if emb_log:
             for i_filter in range(model.num_filter):
-                graph_embs_dicts[i_filter]['com_1'].append(model.com1_list[i_filter].cpu().detach().numpy())
-                graph_embs_dicts[i_filter]['com_2'].append(model.com2_list[i_filter].cpu().detach().numpy())             
-                graph_embs_dicts[i_filter]['pri_1'].append(model.pri1_list[i_filter].cpu().detach().numpy())                  
-                graph_embs_dicts[i_filter]['pri_2'].append(model.pri2_list[i_filter].cpu().detach().numpy())
-                node_embs_dicts[i_filter]['g1'].append((model.nod1_list[i_filter][0].cpu().detach().numpy(), model.nod1_list[i_filter][1].cpu().detach().numpy()))
-                node_embs_dicts[i_filter]['g2'].append((model.nod2_list[i_filter][0].cpu().detach().numpy(), model.nod2_list[i_filter][1].cpu().detach().numpy()))
+                graph_embs_dicts[i_filter]['com_1'].append(model.cp_generator.com1_list[i_filter].cpu().detach().numpy())
+                graph_embs_dicts[i_filter]['com_2'].append(model.cp_generator.com2_list[i_filter].cpu().detach().numpy())             
+                graph_embs_dicts[i_filter]['pri_1'].append(model.cp_generator.pri1_list[i_filter].cpu().detach().numpy())                  
+                graph_embs_dicts[i_filter]['pri_2'].append(model.cp_generator.pri2_list[i_filter].cpu().detach().numpy())
+                node_embs_dicts[i_filter]['g1'].append((model.cp_generator.nod1_list[i_filter][0].cpu().detach().numpy(), model.cp_generator.nod1_list[i_filter][1].cpu().detach().numpy()))
+                node_embs_dicts[i_filter]['g2'].append((model.cp_generator.nod2_list[i_filter][0].cpu().detach().numpy(), model.cp_generator.nod2_list[i_filter][1].cpu().detach().numpy()))
         t.update(len(training_graphs))
 
     rho                            = np.mean(rho_list).item()
@@ -810,7 +810,48 @@ def visualize_embeddings_gradual(args, testing_graphs, trainval_graphs, model: G
         plot_embeddings_for_each_query(embs, ids, plt_cnt, ground_truth_nged, sort_id_mat_normed,extra_dir,
                                     plot_max_num, gnn_id ,trainval_graphs, testing_graphs,concise, sort, perplexity)
 
+def plot_cp_embeddings(ground_truth_nged, graph_embs_dicts, dataset):
+    len_trival                     = len(dataset.trainval_graphs)
+    sort_id_mat                    = np.argsort(ground_truth_nged,  kind = 'mergesort')
+    test_gidlist                   = [10, 20, 30, 40, 50, 60]
+    filter_list                    = [0,1,2,3]
+    tsne = TSNE(n_components=2, perplexity=10)
+    extra_dir = osp.join('img', osp.split(args.pretrain_path)[1], 'plot_cp_emb')
 
+    for qid in test_gidlist:
+        for sort, pid in enumerate(sort_id_mat[qid]):
+            for gnn_id in filter_list:
+                _plot_cp_embeddings(qid, sort, pid, graph_embs_dicts, gnn_id, tsne, extra_dir)
+
+def _plot_cp_embeddings(qid, sort, pid, embs, gnn_id, tsne, extra_dir):
+    emb = np.array([embs[gnn_id]['com_1'][qid][pid],
+                    embs[gnn_id]['pri_1'][qid][pid],
+                    embs[gnn_id]['com_2'][qid][pid],
+                    embs[gnn_id]['pri_2'][qid][pid]])
+    emb = tsne.fit_transform(emb)
+    plt.figure()
+    plt.scatter(emb[0][0], emb[0][1], s=20,
+                color = 'blue',
+                marker='s')
+    plt.scatter(emb[1][0], emb[1][1], s=20,
+                c='red',
+                marker='s')
+    plt.scatter(emb[2][0], emb[2][1], s=20,
+                color = 'blue',
+                marker='s')
+    plt.scatter(emb[3][0], emb[3][1], s=20,
+                c='red',
+                marker='s')
+    cur_axes = plt.gca()
+    cur_axes.axes.get_xaxis().set_visible(False)
+    cur_axes.axes.get_yaxis().set_visible(False)
+
+    exp_figure_name = '{}_{}_sort{}_gcn{}'.format(qid, pid, sort, gnn_id)
+
+    save_fig(plt, extra_dir, exp_figure_name)
+
+    plt.close()
+    
 def plot_embeddings_for_each_query(embs, ids, plt_cnt,ground_truth_nged, sort_id_mat_normed, extra_dir,
                                    plot_max_num, gnn_id, trainval_graphs, testing_graphs, concise, sort, perplexity):
     emb_dict = dict()
@@ -1279,6 +1320,7 @@ if __name__ == "__main__":
     model                       . load_state_dict(torch.load(para))
     model                       . eval()
 
+    # draw_emb_hist_heat(args, dataset.testing_graphs, dataset.trainval_graphs, model)
     scores,                        \
     ground_truth,                  \
     ground_truth_ged,              \
@@ -1286,8 +1328,10 @@ if __name__ == "__main__":
     prediction_mat,                \
     graph_embs_dicts,              \
     node_embs_dicts,               \
-    graph_cdistri_dicts            = evaluate(dataset.testing_graphs, dataset.trainval_graphs, model, dataset, config, False)
-
+    graph_cdistri_dicts            = evaluate(dataset.testing_graphs, dataset.trainval_graphs, model, dataset, config, True)
+    plot_cp_embeddings(ground_truth_ged, graph_embs_dicts, dataset)
+    # compri_sim(ground_truth_ged, graph_embs_dicts)
+    # compri_dist_l2(ground_truth_ged, graph_embs_dicts, dataset)
     # nodecp_sim_matrix_hist_heat(prediction_mat, graph_embs_dicts, node_embs_dicts)
 
     draw_ranking(args, dataset.testing_graphs, dataset.trainval_graphs, prediction_mat, None, model_path='', plot_node_ids=False)
