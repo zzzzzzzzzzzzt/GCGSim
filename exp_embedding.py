@@ -685,6 +685,24 @@ def annotate_heatmap(im, data=None, valfmt="{x:.2f}",
             texts.append(text)
 
     return texts
+def cpembedding_singular(graph_embs_dicts):
+    for i_filter in range(model.num_filter):
+        for i in range(len(graph_embs_dicts[i_filter]['com_1'])):
+            c = _singular(graph_embs_dicts[i_filter]['com_1'][i])
+    return c
+
+def _singular(feature):
+    # feature = torch.cat(feature, dim=0)
+
+    # z = torch.nn.functional.normalize(feature, dim=1)
+
+    # # calculate covariance
+    # z = z.cpu().detach().numpy()
+    z = np.transpose(feature)
+    c = np.cov(z)
+    _, d, _ = np.linalg.svd(c)
+    return d
+
 def get_true_result(all_graphs, testing_graphs, trainval_graphs, sim_or_dist = 'dist'):
     ged_matrix                                  = trainval_graphs.ged
     nged_matrix                                 = trainval_graphs.norm_ged
@@ -1329,9 +1347,9 @@ if __name__ == "__main__":
     graph_embs_dicts,              \
     node_embs_dicts,               \
     graph_cdistri_dicts            = evaluate(dataset.testing_graphs, dataset.trainval_graphs, model, dataset, config, True)
-    plot_cp_embeddings(ground_truth_ged, graph_embs_dicts, dataset)
+    # plot_cp_embeddings(ground_truth_ged, graph_embs_dicts, dataset)
     # compri_sim(ground_truth_ged, graph_embs_dicts)
     # compri_dist_l2(ground_truth_ged, graph_embs_dicts, dataset)
     # nodecp_sim_matrix_hist_heat(prediction_mat, graph_embs_dicts, node_embs_dicts)
 
-    draw_ranking(args, dataset.testing_graphs, dataset.trainval_graphs, prediction_mat, None, model_path='', plot_node_ids=False)
+    cpembedding_singular(graph_embs_dicts)

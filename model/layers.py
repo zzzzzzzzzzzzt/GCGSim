@@ -38,19 +38,15 @@ class MLPLayers(nn.Module):
     def __init__(self, n_in, n_hid, n_out, num_layers = 2 ,use_bn=True, act = 'relu'):
         super(MLPLayers, self).__init__()
         modules = []
-        modules.append(nn.Linear(n_in, n_hid))
-        out = n_hid
         use_act = True
         for i in range(num_layers-1):  # num_layers = 3  i=0,1
-            if i == num_layers-2:
-                use_bn = False
-                use_act = False
-                out = n_out
-            modules.append(nn.Linear(n_hid, out))
-            if use_bn:
-                modules.append(nn.BatchNorm1d(out)) 
+            modules.append(nn.Linear(n_in, n_hid))
             if use_act:
                 modules.append(nn.ReLU())
+            n_in = n_hid
+        modules.append(nn.Linear(n_in, n_out))
+        if use_bn:
+            modules.append(nn.BatchNorm1d(n_out)) 
         self.mlp_list = nn.Sequential(*modules)
     def forward(self,x):
         x = self.mlp_list(x)

@@ -247,7 +247,7 @@ class CP_Generator(nn.Module):
                 if self.config.get('inner_mlp_layers', 1) == 1:
                     self.deepset_inner.append(MLPLayers(self.filters[i], 
                                                         self.filters[i], 
-                                                        None, 
+                                                        self.filters[i], 
                                                         num_layers=1, 
                                                         use_bn=False))
                 else:
@@ -264,12 +264,12 @@ class CP_Generator(nn.Module):
             if self.config.get('outer_mlp_layers', 1) == 1:
                 self.c_deepset_outer.append(MLPLayers(2*self.filters[i], 
                                                         self.filters[i], 
-                                                        None, 
+                                                        self.filters[i], 
                                                         num_layers=1, 
                                                         use_bn=False))
                 self.p_deepset_outer.append(MLPLayers(2*self.filters[i], 
                                                         self.filters[i], 
-                                                        None, 
+                                                        self.filters[i], 
                                                         num_layers=1, 
                                                         use_bn=False))
             else:
