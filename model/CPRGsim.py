@@ -33,8 +33,19 @@ class CPRGsim(nn.Module):
             pri_1[0], pri_1[1] = pri_1[1], pri_1[0]
             pri_2[0], pri_2[1] = pri_2[1], pri_2[0]
         score = self.discriminator(com_1, com_2, pri_1, pri_2)
-        return score, None
+        reg_dict = {
+            'com_loss': self.com_loss(com_1, com_2)
+        } 
+        return score, reg_dict
 
+    def com_loss(self, feature_1, feature_2, loss_tpye = nn.L1Loss(reduction='mean')):
+        com_loss_list = [loss_tpye(feature_1[i], feature_2[i]) for i in range(self.num_filter)]
+        com_loss = 0
+        for i in range(self.num_filter):
+            com_loss += com_loss_list[i]
+
+        return com_loss
+    
     def get_sim_rat(self, pool_1, pool_2):
         if self.config.get('psatype', 'cos') == 'cos':
             com_distri = [F.cosine_similarity(pool_1[i], pool_2[i], dim=-1).unsqueeze(-1) for i in range(self.num_filter)]
@@ -249,7 +260,7 @@ class CP_Generator(nn.Module):
                                                         self.filters[i], 
                                                         self.filters[i], 
                                                         num_layers=1, 
-                                                        use_bn=False))
+                                                        use_bn=True))
                 else:
                     self.deepset_inner.append(MLPLayers(self.filters[i], 
                                                         self.filters[i], 

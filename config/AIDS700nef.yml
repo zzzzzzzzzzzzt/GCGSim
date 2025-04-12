@@ -52,6 +52,7 @@ CPRGsim:
   use_compre: False
   use_pripre: False
   use_deepsets: False
+  use_comloss: True
   use_ff: False
   measure: 'JSD'
   model_name: 'GSC_GNN'
@@ -64,7 +65,7 @@ CPRGsim:
   cat_disloss: False
   cat_NTN: False
   com_att: False
-  alpha_weight: 0.0
+  alpha_weight: 0.001
   beta_weight: 0.0
   mu_weight: 0.0
   lambda_weight: 1.0

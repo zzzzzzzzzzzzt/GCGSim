@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch_geometric.transforms as T
 from torch_geometric.nn.conv.gcn_conv import gcn_norm
 import torch
-def train(self, graph_batch, model, loss_func, optimizer, target, p, dataset = None):
+def train(self, graph_batch, model, loss_func, optimizer, target, dataset = None):
     model.train(True)
 
     
@@ -11,6 +11,7 @@ def train(self, graph_batch, model, loss_func, optimizer, target, p, dataset = N
     use_ssl                       = config.get('use_ssl', False) 
     use_compre                    = config.get('use_compre', False)
     use_pripre                    = config.get('use_pripre', False)
+    use_comloss                   = config.get('use_comloss', False)
     optimizer.zero_grad()
 
     if config['model_name'] in ['CPRGsim']: 
@@ -22,13 +23,13 @@ def train(self, graph_batch, model, loss_func, optimizer, target, p, dataset = N
         # graph_forward.render(filename='graph/DiffDecouple163', view=False, format='pdf')
 
         loss                      = loss_func(prediction, target['target']) 
-        loss_cl                   = 0
+        com_loss                   = 0
         loss_compre               = 0
         loss_pripre               = 0
 
-        if use_ssl:
-            loss_cl = reg_dict['reg_loss']
-            loss += p*loss_cl
+        if use_comloss:
+            com_loss = config['alpha_weight']*reg_dict['com_loss']
+            loss += com_loss
         if use_compre:
             com_lable = torch.abs(torch.normal(mean=0.0, std=0.1, size=(reg_dict['ged_com'].shape[0],))).cuda()
             loss_compre = config['lambda_weight']*loss_func(reg_dict['ged_com'], com_lable)
@@ -59,4 +60,4 @@ def train(self, graph_batch, model, loss_func, optimizer, target, p, dataset = N
 
     optimizer.step()
     
-    return model, float(loss), float(loss_cl), float(loss_compre), float(loss_pripre)
+    return model, float(loss), float(com_loss), float(loss_compre), float(loss_pripre)
