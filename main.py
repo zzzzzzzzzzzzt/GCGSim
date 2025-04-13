@@ -53,7 +53,7 @@ def main(args, config, logger: Logger, run_id: int, dataset: DatasetLocal, date,
         main_index                   = 0
         loss_sum                     = 0
         com_loss_sum                 = 0 
-        losscompre_sum               = 0
+        mutual_loss_sum               = 0
         losspripre_sum               = 0
         for batch_pair in batches:
             data                     = dataset.transform_batch(batch_pair, config)
@@ -61,21 +61,21 @@ def main(args, config, logger: Logger, run_id: int, dataset: DatasetLocal, date,
             main_index               = main_index + batch_pair[0].num_graphs 
             if epoch % 2 == 0:
                 data["g1"], data["g2"] = data["g2"], data["g1"]
-            model, loss, com_loss, loss_compre, loss_pripre \
+            model, loss, com_loss, mutual_loss, loss_pripre \
                                      = T.train(data, model, loss_func, optimizer, target)                 
             loss_sum                 = loss_sum + loss
             com_loss_sum             = com_loss_sum + com_loss
-            losscompre_sum           = losscompre_sum + loss_compre
+            mutual_loss_sum          = mutual_loss_sum + mutual_loss
             losspripre_sum           = losspripre_sum + loss_pripre                                  
             if config['board_log']:
                 writer               .add_scalar('loss/ged_loss', loss, log_i)
                 writer               .add_scalar('loss/loss_cl', com_loss, log_i)
-                writer               .add_scalar('loss/loss_compre', loss_compre, log_i)
+                writer               .add_scalar('loss/loss_compre', mutual_loss, log_i)
                 writer               .add_scalar('loss/loss_pripre', loss_pripre, log_i)
                 log_i                = log_i + 1
         loss                         = loss_sum / main_index                              
         com_loss                     = com_loss_sum / main_index
-        loss_compre                  = losscompre_sum / main_index
+        mutual_loss                  = mutual_loss / main_index
         loss_pripre                  = losspripre_sum / main_index                                
         loss_list.append(loss)
 
@@ -110,7 +110,7 @@ def main(args, config, logger: Logger, run_id: int, dataset: DatasetLocal, date,
 
 
         if epoch != config['epochs']-1:
-            postfix_str = "<Epoch %d> [Train Loss] %.5f [Com Loss] %.5f [Compre Loss] %.5f [Pripre Loss] %.5f"% (epoch, loss, com_loss, loss_compre, loss_pripre)
+            postfix_str = "<Epoch %d> [Train Loss] %.5f [Com Loss] %.5f [Mutual Loss] %.5f [Pripre Loss] %.5f"% (epoch, loss, com_loss, mutual_loss, loss_pripre)
             # pbar.set_postfix_str(postfix_str)
         elif epoch == config['epochs'] and config.get('show_last', False): 
             mse, rho, tau, prec_at_10, prec_at_20 = T.evaluation(dataset.testing_graphs, dataset.training_graphs, model, loss_func, dataset)

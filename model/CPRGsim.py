@@ -24,17 +24,21 @@ class CPRGsim(nn.Module):
         self.num_filter = len(self.filters)
         self.cp_generator = CP_Generator(config, n_feat)
         self.discriminator = Discriminator(config)
-    
+        self.statnet = StatisticsNetwork(config)
+
     def forward(self, data):
         com_1, com_2, pri_1, pri_2, pool_1, pool_2 = self.cp_generator(data)
         if self.config['sim_rat']:
             com_1, com_2, pri_1, pri_2 = self.feature_distri(com_1, com_2, pri_1, pri_2, pool_1, pool_2)
+        
+        minfo = self.statnet(com_1, com_2, pool_1, pool_2)
         if self.ex:
             pri_1[0], pri_1[1] = pri_1[1], pri_1[0]
             pri_2[0], pri_2[1] = pri_2[1], pri_2[0]
         score = self.discriminator(com_1, com_2, pri_1, pri_2)
         reg_dict = {
-            'com_loss': self.com_loss(com_1, com_2)
+            'com_loss': self.com_loss(com_1, com_2),
+            'mutual_loss': self.mutual_loss(minfo)
         } 
         return score, reg_dict
 
@@ -45,6 +49,16 @@ class CPRGsim(nn.Module):
             com_loss += com_loss_list[i]
 
         return com_loss
+    
+    def mutual_loss(self, minfo):
+        djs_loss = DJSLoss()
+        m_loss = 0 
+        for i in range(self.num_filter):
+            m_loss_g1_c2 = djs_loss(minfo['g1_c2'][i], minfo['g1_c2_prime'][i])
+            m_loss_g2_c1 = djs_loss(minfo['g2_c1'][i], minfo['g2_c1_prime'][i])
+            m_loss += (m_loss_g1_c2 + m_loss_g2_c1)/2
+        
+        return m_loss/self.num_filter
     
     def get_sim_rat(self, pool_1, pool_2):
         if self.config.get('psatype', 'cos') == 'cos':
@@ -693,6 +707,56 @@ class CP_Generator(nn.Module):
                 writer.add_histogram('param/{}'.format(name), param, log_i)
                 writer.add_histogram('param_grad/{}'.format(name), param.grad, log_i)
 
+class StatisticsNetwork(nn.Module):
+    def __init__(self, config):
+        super(StatisticsNetwork, self).__init__()
+        self.config = config
+        self.filters = self.config['gnn_filters']
+        self.num_filter = len(self.filters)
+        self.network_g1_c2 = nn.ModuleList()
+        self.network_g2_c1 = nn.ModuleList()
+        for i in range(self.num_filter):
+            self.network_g1_c2.append(MLPLayers(2*self.filters[i], 
+                                                self.filters[i], 
+                                                1, 
+                                                num_layers=3, 
+                                                use_bn=False))
+            self.network_g2_c1.append(MLPLayers(2*self.filters[i], 
+                                                self.filters[i], 
+                                                1, 
+                                                num_layers=3, 
+                                                use_bn=False))   
+    def forward(self, c1, c2, g1, g2):
+        MInfo = {
+            'g1_c2':[],
+            'g1_c2_prime':[],
+            'g2_c1':[],
+            'g2_c1_prime':[]
+        }
+        for i in range(self.num_filter):
+            g1_prime = torch.cat([g1[i][1:], g1[i][0].unsqueeze(0)], dim=0)
+            g2_prime = torch.cat([g2[i][1:], g2[i][0].unsqueeze(0)], dim=0)
+            MInfo['g1_c2'].append(self.network_pass(g1[i], c2[i], self.network_g1_c2[i]))
+            MInfo['g1_c2_prime'].append(self.network_pass(g1_prime, c2[i], self.network_g1_c2[i]))
+            MInfo['g2_c1'].append(self.network_pass(g2[i], c1[i], self.network_g2_c1[i]))
+            MInfo['g2_c1_prime'].append(self.network_pass(g2_prime, c1[i], self.network_g2_c1[i]))
+
+        return MInfo
+    def network_pass(self,g ,c, network):
+        x = torch.cat([g, c], dim=1)
+        return network(x)
+
+class DJSLoss(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+
+    def __call__(self, T, T_prime):
+        joint_expectation = (-F.softplus(-T)).mean()
+        marginal_expectation = F.softplus(T_prime).mean()
+        mutual_info = joint_expectation - marginal_expectation
+
+        return -mutual_info
+    
 class GraphCommonPrediction(nn.Module):
     def __init__(self, n_feat):
         super(GraphCommonPrediction, self).__init__()

@@ -9,7 +9,7 @@ CPRGsim:
   iter_val_start: 1
   iter_val_every: 1
   save_best: True
-  save_best_all: True
+  save_best_all: False
   multilabel: False
   patience: -1
   seed: 1234
@@ -53,6 +53,7 @@ CPRGsim:
   use_pripre: False
   use_deepsets: False
   use_comloss: True
+  use_mutualloss: True
   use_ff: False
   measure: 'JSD'
   model_name: 'GSC_GNN'

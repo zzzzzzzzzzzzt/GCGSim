@@ -9,8 +9,8 @@ def train(self, graph_batch, model, loss_func, optimizer, target, dataset = None
     
     config                        = self.config   
     use_ssl                       = config.get('use_ssl', False) 
-    use_compre                    = config.get('use_compre', False)
-    use_pripre                    = config.get('use_pripre', False)
+    # use_compre                    = config.get('use_compre', False)
+    use_mutualloss                = config.get('use_mutualloss', False)
     use_comloss                   = config.get('use_comloss', False)
     optimizer.zero_grad()
 
@@ -23,21 +23,20 @@ def train(self, graph_batch, model, loss_func, optimizer, target, dataset = None
         # graph_forward.render(filename='graph/DiffDecouple163', view=False, format='pdf')
 
         loss                      = loss_func(prediction, target['target']) 
-        com_loss                   = 0
-        loss_compre               = 0
-        loss_pripre               = 0
+        com_loss                  = 0
+        mutual_loss               = 0
+        # loss_pripre               = 0
 
         if use_comloss:
             com_loss = config['alpha_weight']*reg_dict['com_loss']
             loss += com_loss
-        if use_compre:
-            com_lable = torch.abs(torch.normal(mean=0.0, std=0.1, size=(reg_dict['ged_com'].shape[0],))).cuda()
-            loss_compre = config['lambda_weight']*loss_func(reg_dict['ged_com'], com_lable)
-            loss += loss_compre
-        if use_pripre:
-            pri_lable = target['target_scaler']
-            loss_pripre = config['rho_weight']*loss_func(reg_dict['ged_pri'], pri_lable)
-            loss += loss_pripre
+        # if use_compre:
+        #     com_lable = torch.abs(torch.normal(mean=0.0, std=0.1, size=(reg_dict['ged_com'].shape[0],))).cuda()
+        #     loss_compre = config['lambda_weight']*loss_func(reg_dict['ged_com'], com_lable)
+        #     loss += loss_compre
+        if use_mutualloss:
+            mutual_loss = config['beta_weight']*reg_dict['mutual_loss']
+            loss += mutual_loss
             
         loss.backward()
         if self.config.get('clip_grad', False):
@@ -60,4 +59,4 @@ def train(self, graph_batch, model, loss_func, optimizer, target, dataset = None
 
     optimizer.step()
     
-    return model, float(loss), float(com_loss), float(loss_compre), float(loss_pripre)
+    return model, float(loss), float(com_loss), float(mutual_loss), float(0)
