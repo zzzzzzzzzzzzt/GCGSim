@@ -24,18 +24,23 @@ class CPRGsim(nn.Module):
         self.num_filter = len(self.filters)
         self.cp_generator = CP_Generator(config, n_feat)
         self.discriminator = Discriminator(config)
-        self.statnet = StatisticsNetwork(config)
+        if self.config.get('use_mutualloss', False):
+            self.statnet = StatisticsNetwork(config)
 
     def forward(self, data):
         com_1, com_2, pri_1, pri_2, pool_1, pool_2 = self.cp_generator(data)
+
         if self.config['sim_rat']:
             com_1, com_2, pri_1, pri_2 = self.feature_distri(com_1, com_2, pri_1, pri_2, pool_1, pool_2)
+
+        if self.config.get('use_mutualloss', False):
+            minfo = self.statnet(com_1, com_2, pool_1, pool_2)
         
-        minfo = self.statnet(com_1, com_2, pool_1, pool_2)
-        if self.ex:
-            pri_1[0], pri_1[1] = pri_1[1], pri_1[0]
-            pri_2[0], pri_2[1] = pri_2[1], pri_2[0]
-        score = self.discriminator(com_1, com_2, pri_1, pri_2)
+        self.swap_rate = self.config.get('swap_rate', 0.0)
+        if self.swap_rate > 0.0:
+            pri_1, pri_2, swap_num = self.batch_swap(pri_1, pri_2, self.swap_rate)
+            
+        score = self.discriminator(com_2, com_1, pri_1, pri_2)
         reg_dict = {
             'com_loss': self.com_loss(com_1, com_2) if self.config.get('use_comloss', False) else None, 
             'mutual_loss': self.mutual_loss(minfo) if self.config.get('use_mutualloss', False) else None,
@@ -60,6 +65,12 @@ class CPRGsim(nn.Module):
             m_loss += (m_loss_g1_c2 + m_loss_g2_c1)/2
         
         return m_loss/self.num_filter
+    
+    def batch_swap(self, pri_1, pri_2, swap_rate):
+        swap_num = int(self.config['batch_size']*swap_rate)
+        for i in range(self.num_filter):
+            pri_1[i][-swap_num:0], pri_2[i][-swap_num:0] = pri_2[i][-swap_num:0], pri_1[i][-swap_num:0]
+        return pri_1, pri_2, swap_num
     
     def get_sim_rat(self, pool_1, pool_2):
         if self.config.get('psatype', 'cos') == 'cos':
