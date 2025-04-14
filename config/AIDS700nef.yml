@@ -49,11 +49,12 @@ CPRGsim:
   tensor_neurons: 16
   output_comb: True
   use_ssl: False
-  use_compre: False
-  use_pripre: False
+  # use_compre: False
+  # use_pripre: False
   use_deepsets: False
-  use_comloss: True
-  use_mutualloss: True
+  use_comloss: False
+  use_mutualloss: False
+  use_swap: True
   use_ff: False
   measure: 'JSD'
   model_name: 'GSC_GNN'
@@ -68,7 +69,7 @@ CPRGsim:
   com_att: False
   alpha_weight: 0.001
   beta_weight: 0.0
-  mu_weight: 0.0
+  mu_weight: 1.0
   lambda_weight: 1.0
   rho_weight: 1.0
   schedule_start: -1

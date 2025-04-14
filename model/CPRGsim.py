@@ -37,8 +37,9 @@ class CPRGsim(nn.Module):
             pri_2[0], pri_2[1] = pri_2[1], pri_2[0]
         score = self.discriminator(com_1, com_2, pri_1, pri_2)
         reg_dict = {
-            'com_loss': self.com_loss(com_1, com_2),
-            'mutual_loss': self.mutual_loss(minfo)
+            'com_loss': self.com_loss(com_1, com_2) if self.config.get('use_comloss', False) else None, 
+            'mutual_loss': self.mutual_loss(minfo) if self.config.get('use_mutualloss', False) else None,
+            'swap_score': self.discriminator(com_1, com_2, pri_1, pri_2) if self.config.get('use_swap', False) else None
         } 
         return score, reg_dict
 

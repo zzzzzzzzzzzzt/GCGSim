@@ -9,9 +9,9 @@ def train(self, graph_batch, model, loss_func, optimizer, target, dataset = None
     
     config                        = self.config   
     use_ssl                       = config.get('use_ssl', False) 
-    # use_compre                    = config.get('use_compre', False)
     use_mutualloss                = config.get('use_mutualloss', False)
     use_comloss                   = config.get('use_comloss', False)
+    use_swap                      = config.get('use_swap', False)
     optimizer.zero_grad()
 
     if config['model_name'] in ['CPRGsim']: 
@@ -25,7 +25,7 @@ def train(self, graph_batch, model, loss_func, optimizer, target, dataset = None
         loss                      = loss_func(prediction, target['target']) 
         com_loss                  = 0
         mutual_loss               = 0
-        # loss_pripre               = 0
+        swap_loss                 = 0
 
         if use_comloss:
             com_loss = config['alpha_weight']*reg_dict['com_loss']
@@ -37,7 +37,10 @@ def train(self, graph_batch, model, loss_func, optimizer, target, dataset = None
         if use_mutualloss:
             mutual_loss = config['beta_weight']*reg_dict['mutual_loss']
             loss += mutual_loss
-            
+        if use_swap:
+            swap_loss = config['mu_weight']*loss_func(reg_dict['swap_score'], target['target'])
+            loss += swap_loss
+
         loss.backward()
         if self.config.get('clip_grad', False):
             nn.utils.clip_grad_norm_(model.parameters(), 1)
@@ -59,4 +62,4 @@ def train(self, graph_batch, model, loss_func, optimizer, target, dataset = None
 
     optimizer.step()
     
-    return model, float(loss), float(com_loss), float(mutual_loss), float(0)
+    return model, float(loss), float(com_loss), float(mutual_loss), float(swap_loss)
