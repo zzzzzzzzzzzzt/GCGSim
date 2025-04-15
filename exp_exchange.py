@@ -18,14 +18,14 @@ def gen_subgraph(n_node, n_feature, n_link):
     adj = torch.ones((n_node, n_node), dtype=torch.uint8)
     non_edge_index = adj.nonzero().t()
     directed_non_edge_index = to_directed(non_edge_index)
-    num_edges = directed_non_edge_index.size()[1]
-    to_add = random.randint(n_node-1, n_node*(n_node-1)//2)
+    # num_edges = directed_non_edge_index.size()[1]
+    # to_add = random.randint(n_node-1, n_node*(n_node-1)//2+1)
 
-    edge_index_p = directed_non_edge_index[:, torch.randperm(num_edges)[:to_add]]
+    # edge_index_p = directed_non_edge_index[:, torch.randperm(num_edges)[:to_add]]
     # if edge_index_p.size(1):
     #     edge_index_p = to_undirected(edge_index_p)
     
-    return one_hot_labels, edge_index_p, link_node
+    return one_hot_labels, directed_non_edge_index, link_node
 
 def joint(g, one_hot_labels, edge_index_p, link_node, id):
     edge_index_p = edge_index_p + g.num_nodes
@@ -51,39 +51,29 @@ def gen_pair(g1, g2, n_node, n_feature, n_link):
     GED = n_node + edge_index_p.size()[1] + n_link
     return (g1_added, g2_added), GED
 
-# def gen_pairs(data_graph, n_node, n_feature, n_link, same=True):
-#     count = len(data_graph)
-#     mat = torch.full((count, count), float("inf")) 
-#     norm_mat = torch.full((count, count), float("inf"))
+def gen_samepri(data_graph, n_feature, n_node=4, n_link=2):
+    count = len(data_graph)
+    mat = torch.full((count, count), float("inf")) 
+    norm_mat = torch.full((count, count), float("inf"))
 
-#     synth_graph = []
-#     for i in range(count//2):
-#         if same:
-#             one_hot_labels, edge_index_p, link_node = gen_subgraph(n_node, n_feature, n_link)
-#             g1_added = joint(data_graph[2*i], one_hot_labels, edge_index_p, link_node)
-#             g2_added = joint(data_graph[2*i+1], one_hot_labels, edge_index_p, link_node)
-#             ged_1 = n_node + edge_index_p.size()[1] + n_link
-#             ged_2 = ged_1
-#         # G, GED = gen_pair(data_graph[2*i], data_graph[2*i+1], n_node, n_feature, n_link)
-#         else:
-#             one_hot_labels, edge_index_p, link_node = gen_subgraph(n_node, n_feature, n_link)
-#             g1_added = joint(data_graph[2*i], one_hot_labels, edge_index_p, link_node)
-#             ged_1 = n_node + edge_index_p.size()[1] + n_link
+    synth_graph = []
+    for i in range(count//2):
+        one_hot_labels, edge_index_p, link_node = gen_subgraph(n_node, n_feature, n_link)
+        g1_added = joint(data_graph[2*i], one_hot_labels, edge_index_p, link_node, 2*i)
+        g2_added = joint(data_graph[2*i+1], one_hot_labels, edge_index_p, link_node, 2*i+1)
+        ged_1 = n_node + edge_index_p.size()[1] + n_link
+        ged_2 = ged_1
 
-#             one_hot_labels, edge_index_p, link_node = gen_subgraph(n_node+5, n_feature, n_link+2)
-#             g2_added = joint(data_graph[2*i+1], one_hot_labels, edge_index_p, link_node)
-#             ged_2 = n_node+5 + edge_index_p.size()[1] + n_link+5
+        mat[2*i,2*i], mat[2*i+1,2*i+1] = ged_1, ged_2
+        norm_mat[2*i,2*i] = ged_1 / (0.5 * (g1_added.num_nodes + data_graph[2*i].num_nodes))
+        norm_mat[2*i+1,2*i+1] = ged_2 / (0.5 * (g2_added.num_nodes + data_graph[2*i+1].num_nodes))
 
-#         mat[2*i,2*i], mat[2*i+1,2*i+1] = ged_1, ged_2
-#         norm_mat[2*i,2*i] = ged_1 / (0.5 * (g1_added.num_nodes + data_graph[2*i].num_nodes))
-#         norm_mat[2*i+1,2*i+1] = ged_2 / (0.5 * (g2_added.num_nodes + data_graph[2*i+1].num_nodes))
-
-#         synth_graph.append(g1_added)
-#         synth_graph.append(g2_added)
+        synth_graph.append(g1_added)
+        synth_graph.append(g2_added)
     
-#     return data_graph, synth_graph, mat, norm_mat
+    return data_graph, synth_graph, mat, norm_mat
 
-def gen_pairs_com(data_graph, n_node, n_feature, n_link, same=True):
+def gen_samecom(data_graph, n_feature, n_node=1, n_link=1, same=True):
     count = len(data_graph)
     mat = torch.full((count, 2*count), float("inf")) 
     norm_mat = torch.full((count, 2*count), float("inf"))
@@ -94,9 +84,9 @@ def gen_pairs_com(data_graph, n_node, n_feature, n_link, same=True):
         g1_added = joint(data_graph[i], one_hot_labels, edge_index_p, link_node, 2*i)
         ged_1 = n_node + edge_index_p.size()[1] + n_link
 
-        one_hot_labels, edge_index_p, link_node = gen_subgraph(n_node+2, n_feature, n_link+1)
+        one_hot_labels, edge_index_p, link_node = gen_subgraph(n_node+1, n_feature, n_link+1)
         g2_added = joint(data_graph[i], one_hot_labels, edge_index_p, link_node, 2*i+1)
-        ged_2 = n_node+2 + edge_index_p.size()[1] + n_link+1
+        ged_2 = n_node+1 + edge_index_p.size()[1] + n_link+1
 
         mat[i,2*i], mat[i,2*i+1] = ged_1, ged_2
         norm_mat[i,2*i] = ged_1 / (0.5 * (g1_added.num_nodes + data_graph[i].num_nodes))
@@ -133,33 +123,52 @@ def transform_batch(batch, mat, norm_mat):
     return new_data
 
 @torch.no_grad()
-def evaluate(model, dataset: DatasetLocal, n_node=1, n_link=1):
+def evaluate(model, dataset: DatasetLocal, synth_type):
     model.eval()
 
     training_graphs = dataset.training_graphs
     mapsize = len(training_graphs)
-    scores = np.empty((mapsize,2))
-    scores_ex = np.empty((mapsize,2))
-    prediction_mat = np.empty((mapsize,2))
-    prediction_mat_ex = np.empty((mapsize,2))
-    ground_truth = np.empty((mapsize,2))
+    if synth_type == 'samecom':
+        scores = np.empty((mapsize,2))
+        prediction_mat = np.empty((mapsize,2))
+        ground_truth = np.empty((mapsize,2))
 
-    source_graph, synth_graph, mat, norm_mat = gen_pairs_com(training_graphs, n_node, dataset.input_dim, n_link, True)
+        source_graph, synth_graph, mat, norm_mat = gen_samecom(training_graphs, dataset.input_dim)
 
-    for i in range(mapsize):
-        source_batch = Batch.from_data_list([source_graph[i], source_graph[i]])
-        target_batch = Batch.from_data_list([synth_graph[2*i], synth_graph[2*i+1]])
+        for i in range(mapsize):
+            source_batch = Batch.from_data_list([source_graph[i], source_graph[i]])
+            target_batch = Batch.from_data_list([synth_graph[2*i], synth_graph[2*i+1]])
 
-        data = transform_batch((source_batch, target_batch), mat, norm_mat)
-        target = data["target"]
-        ground_truth[i] = target
+            data = transform_batch((source_batch, target_batch), mat, norm_mat)
+            target = data["target"]
+            ground_truth[i] = target
 
-        prediction, loss_cl = model(data)
+            prediction, loss_cl = model(data)
 
-        prediction_mat[i] = prediction.cpu().detach().numpy()
-        scores[i]  = ( F.mse_loss(prediction.cpu().detach(), target, reduction="none").numpy())
+            prediction_mat[i] = prediction.cpu().detach().numpy()
+            scores[i]  = ( F.mse_loss(prediction.cpu().detach(), target, reduction="none").numpy())
+        
+        return 0
+    if synth_type == 'samepri':
+        scores = np.empty((mapsize//2,2))
+        prediction_mat = np.empty((mapsize//2,2))
+        ground_truth = np.empty((mapsize//2,2))
+        
+        source_graph, synth_graph, mat, norm_mat = gen_samepri(training_graphs, dataset.input_dim)
 
-    return 0
+        for i in range(mapsize//2):
+            source_batch = Batch.from_data_list([source_graph[2*i], source_graph[2*i+1]])
+            target_batch = Batch.from_data_list([synth_graph[2*i], synth_graph[2*i+1]])            
+            data = transform_batch((source_batch, target_batch), mat, norm_mat)
+            target = data["target"]
+            ground_truth[i] = target
+
+            prediction, loss_cl = model(data)
+
+            prediction_mat[i] = prediction.cpu().detach().numpy()
+            scores[i]  = ( F.mse_loss(prediction.cpu().detach(), target, reduction="none").numpy())
+
+        return 0
 if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument('--dataset',           type = str,              default = 'AIDS700nef') 
@@ -188,4 +197,4 @@ if __name__ == "__main__":
     model                       . load_state_dict(torch.load(para))
     model                       . eval()
 
-    evaluate(model, dataset)
+    evaluate(model, dataset, 'samecom')
