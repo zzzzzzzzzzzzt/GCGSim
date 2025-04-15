@@ -39,7 +39,10 @@ class CPRGsim(nn.Module):
         self.swap_rate = self.config.get('swap_rate', 0.0)
         if self.swap_rate > 0.0:
             pri_1, pri_2, swap_num = self.batch_swap(pri_1, pri_2, self.swap_rate)
-            
+
+        if self.ex:
+            self.exbatch_pri(pri_1, pri_2) 
+
         score = self.discriminator(com_2, com_1, pri_1, pri_2)
         reg_dict = {
             'com_loss': self.com_loss(com_1, com_2) if self.config.get('use_comloss', False) else None, 
@@ -71,6 +74,12 @@ class CPRGsim(nn.Module):
         for i in range(self.num_filter):
             pri_1[i][-swap_num:0], pri_2[i][-swap_num:0] = pri_2[i][-swap_num:0], pri_1[i][-swap_num:0]
         return pri_1, pri_2, swap_num
+    
+    def exbatch_pri(self, pri_1, pri_2):
+        for i in range(self.num_filter):
+           pri_1[i][0], pri_1[i][1] = pri_1[i][1],  pri_1[i][0]
+           pri_2[i][0], pri_2[i][1] = pri_2[i][1],  pri_2[i][0]
+        return pri_1, pri_2
     
     def get_sim_rat(self, pool_1, pool_2):
         if self.config.get('psatype', 'cos') == 'cos':
