@@ -21,8 +21,10 @@ def train(self, graph_batch, model, loss_func, optimizer, target, dataset = None
         # from torchviz import make_dot
         # graph_forward = make_dot(model(graph_batch))
         # graph_forward.render(filename='graph/DiffDecouple163', view=False, format='pdf')
-
-        loss                      = loss_func(prediction, target['target']) 
+        _target = target['target']
+        if reg_dict['prep_num']:
+            _target[reg_dict['prep_num']:] = torch.ones_like(target['target'][reg_dict['prep_num']:])
+        loss                      = loss_func(prediction, _target)
         com_loss                  = 0
         mutual_loss               = 0
         swap_loss                 = 0

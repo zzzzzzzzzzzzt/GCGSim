@@ -26,7 +26,8 @@ class CPRGsim(nn.Module):
         self.discriminator = Discriminator(config)
         if self.config.get('use_mutualloss', False):
             self.statnet = StatisticsNetwork(config)
-
+        # list1 = [0,1,2,3,4,5,6,7,8,9]
+        # list11 = list1[-2:]
     def forward(self, data):
         com_1, com_2, pri_1, pri_2, pool_1, pool_2 = self.cp_generator(data)
 
@@ -35,10 +36,18 @@ class CPRGsim(nn.Module):
 
         if self.config.get('use_mutualloss', False):
             minfo = self.statnet(com_1, com_2, pool_1, pool_2)
-        
+
+        self.prep_rate = self.config.get('prep_rate', 0.0)     
+        self.crep_rate = self.config.get('crep_rate', 0.0)
         self.swap_rate = self.config.get('swap_rate', 0.0)
+        end = None
+        if self.prep_rate > 0.0:
+            pri_1, pri_2, end = self.batch_replicate(pri_1, pri_2, self.prep_rate, end)
+            prep_num = end
+        if self.crep_rate > 0.0:
+            com_1, com_2, end = self.batch_replicate(com_1, com_2, self.crep_rate, end)
         if self.swap_rate > 0.0:
-            pri_1, pri_2, swap_num = self.batch_swap(pri_1, pri_2, self.swap_rate)
+            pri_1, pri_2, end = self.batch_swap(pri_1, pri_2, self.swap_rate, end)
 
         if self.ex:
             com_1, com_2 = self.exbatch_pri(com_1, com_2) 
@@ -47,7 +56,8 @@ class CPRGsim(nn.Module):
         reg_dict = {
             'com_loss': self.com_loss(com_1, com_2) if self.config.get('use_comloss', False) else None, 
             'mutual_loss': self.mutual_loss(minfo) if self.config.get('use_mutualloss', False) else None,
-            'swap_score': self.discriminator(com_1, com_2, pri_1, pri_2) if self.config.get('use_swap', False) else None
+            'swap_score': self.discriminator(com_1, com_2, pri_1, pri_2) if self.config.get('use_swap', False) else None,
+            'prep_num': prep_num if  self.prep_rate > 0.0 else None
         } 
         return score, reg_dict
 
@@ -69,11 +79,23 @@ class CPRGsim(nn.Module):
         
         return m_loss/self.num_filter
     
-    def batch_swap(self, pri_1, pri_2, swap_rate):
+    def batch_swap(self, pri_1, pri_2, swap_rate, start):
         swap_num = int(self.config['batch_size']*swap_rate)
+        end = start-swap_num if start else -swap_num
         for i in range(self.num_filter):
-            pri_1[i][-swap_num:0], pri_2[i][-swap_num:0] = pri_2[i][-swap_num:0], pri_1[i][-swap_num:0]
-        return pri_1, pri_2, swap_num
+            pri_1[i][end:start], pri_2[i][end:start] = pri_2[i][end:start].clone(), pri_1[i][end:start].clone()
+        return pri_1, pri_2, end
+    
+    def batch_replicate(self, feature_1, feature_2, rate, start):
+        _rate = rate/2
+        rep_num = int(self.config['batch_size']*_rate)
+        end1 = start-rep_num if start else -rep_num
+        end2 = end1-rep_num
+        for i in range(self.num_filter):
+            feature_1[i][end1:start] = feature_2[i][end1:start].clone()
+            feature_2[i][end2:end1] = feature_1[i][end2:end1].clone()
+        
+        return feature_1, feature_2, end2
     
     def exbatch_pri(self, feature_1, feature_2):
         for i in range(self.num_filter):
