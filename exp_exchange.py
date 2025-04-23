@@ -51,7 +51,7 @@ def gen_pair(g1, g2, n_node, n_feature, n_link):
     GED = n_node + edge_index_p.size()[1] + n_link
     return (g1_added, g2_added), GED
 
-def gen_samepri(data_graph, n_feature, n_node=4, n_link=2):
+def gen_samepri(data_graph, n_feature, n_node=2, n_link=1):
     count = len(data_graph)
     mat = torch.full((count, count), float("inf")) 
     norm_mat = torch.full((count, count), float("inf"))
@@ -147,7 +147,8 @@ def evaluate(model, dataset: DatasetLocal, synth_type):
 
             prediction_mat[i] = prediction.cpu().detach().numpy()
             scores[i]  = ( F.mse_loss(prediction.cpu().detach(), target, reduction="none").numpy())
-        
+
+            print(f"{scores.mean():.6f}")
         return 0
     if synth_type == 'samepri':
         scores = np.empty((mapsize//2,2))
@@ -168,6 +169,7 @@ def evaluate(model, dataset: DatasetLocal, synth_type):
             prediction_mat[i] = prediction.cpu().detach().numpy()
             scores[i]  = ( F.mse_loss(prediction.cpu().detach(), target, reduction="none").numpy())
 
+            print(f"{scores.mean():.6f}")
         return 0
 if __name__ == "__main__":
     parser = ArgumentParser()
@@ -197,4 +199,4 @@ if __name__ == "__main__":
     model                       . load_state_dict(torch.load(para))
     model                       . eval()
 
-    evaluate(model, dataset, 'samecom')
+    evaluate(model, dataset, 'samepri')

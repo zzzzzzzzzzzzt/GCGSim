@@ -54,10 +54,11 @@ CPRGsim:
   use_deepsets: False
   use_comloss: False
   use_mutualloss: False
-  use_swap: True
+  use_swap: False
   swap_rate: 0.0
   crep_rate: 0.0
   prep_rate: 0.0
+  ppre_rate: 0.1
   use_ff: False
   measure: 'JSD'
   model_name: 'GSC_GNN'

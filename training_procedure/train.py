@@ -12,6 +12,7 @@ def train(self, graph_batch, model, loss_func, optimizer, target, dataset = None
     use_mutualloss                = config.get('use_mutualloss', False)
     use_comloss                   = config.get('use_comloss', False)
     use_swap                      = config.get('use_swap', False)
+    ppre_rate                     = config.get('ppre_rate', 0.0)
     optimizer.zero_grad()
 
     if config['model_name'] in ['CPRGsim']: 
@@ -25,9 +26,7 @@ def train(self, graph_batch, model, loss_func, optimizer, target, dataset = None
         if reg_dict['prep_num']:
             _target[reg_dict['prep_num']:] = torch.ones_like(target['target'][reg_dict['prep_num']:])
         loss                      = loss_func(prediction, _target)
-        com_loss                  = 0
-        mutual_loss               = 0
-        swap_loss                 = 0
+        com_loss, mutual_loss, swap_loss, ppre_loss = 0, 0, 0, 0
 
         if use_comloss:
             com_loss = config['alpha_weight']*reg_dict['com_loss']
@@ -42,6 +41,9 @@ def train(self, graph_batch, model, loss_func, optimizer, target, dataset = None
         if use_swap:
             swap_loss = config['mu_weight']*loss_func(reg_dict['swap_score'], target['target'])
             loss += swap_loss
+        if ppre_rate > 0:
+            ppre_loss = ppre_rate*loss_func(reg_dict['ged'], target['target_ged'])
+            loss += ppre_loss
 
         loss.backward()
         if self.config.get('clip_grad', False):
@@ -64,4 +66,4 @@ def train(self, graph_batch, model, loss_func, optimizer, target, dataset = None
 
     optimizer.step()
     
-    return model, float(loss), float(com_loss), float(mutual_loss), float(swap_loss)
+    return model, float(loss), float(com_loss), float(mutual_loss), float(swap_loss), float(ppre_loss)

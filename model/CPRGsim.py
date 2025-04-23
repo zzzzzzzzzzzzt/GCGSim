@@ -40,6 +40,7 @@ class CPRGsim(nn.Module):
         self.prep_rate = self.config.get('prep_rate', 0.0)     
         self.crep_rate = self.config.get('crep_rate', 0.0)
         self.swap_rate = self.config.get('swap_rate', 0.0)
+        self.ppre_rate = self.config.get('ppre_rate', 0.0)
         end = None
         if self.prep_rate > 0.0:
             pri_1, pri_2, end = self.batch_replicate(pri_1, pri_2, self.prep_rate, end)
@@ -57,7 +58,8 @@ class CPRGsim(nn.Module):
             'com_loss': self.com_loss(com_1, com_2) if self.config.get('use_comloss', False) else None, 
             'mutual_loss': self.mutual_loss(minfo) if self.config.get('use_mutualloss', False) else None,
             'swap_score': self.discriminator(com_1, com_2, pri_2, pri_1) if self.config.get('use_swap', False) else None,
-            'prep_num': prep_num if  self.prep_rate > 0.0 else None
+            'prep_num': prep_num if  self.prep_rate > 0.0 else None,
+            'ged': self.discriminator.compute_ged() if self.ppre_rate > 0 else None
         } 
         return score, reg_dict
 
@@ -208,7 +210,13 @@ class Discriminator(nn.Module):
                                              nn.Linear(hiden_neurons, self.config['tensor_neurons']),
                                              nn.ReLU(),
                                              nn.Linear(self.config['tensor_neurons'] , 1)) 
-               
+        self.ppre_rate = self.config.get('ppre_rate', 0.0)
+        if self.ppre_rate > 0:
+            self.ged_layer = nn.Sequential(nn.Linear(hiden_neurons, hiden_neurons),
+                                            nn.ReLU(),
+                                            nn.Linear(hiden_neurons, self.config['tensor_neurons']),
+                                            nn.ReLU(),
+                                            nn.Linear(self.config['tensor_neurons'] , 1))
     def forward(self, com_1, com_2, pri_1, pri_2):
         return self.compute_ntn_score(com_1, com_2, pri_1, pri_2)
     
@@ -225,12 +233,18 @@ class Discriminator(nn.Module):
                                             )
         else:
             ntn_score = []
+            _ntn_score_onlyp = []
             for i in range(self.config['NTN_layers']):
                 c_ntn_score = self.c_NTN_list[i](common_feature_1[i], common_feature_2[i])
                 p_ntn_score = self.p_NTN_list[i](private_feature_1[i], private_feature_2[i])
                 ntn_score.append(torch.cat([c_ntn_score, p_ntn_score], dim=-1))
+                _ntn_score_onlyp.append(p_ntn_score)
             ntn_score = torch.cat(ntn_score, dim=-1)
+            self.ntn_score_onlyp = torch.cat(_ntn_score_onlyp, dim=-1)  
         return torch.sigmoid(self.score_sim_layer(ntn_score).squeeze())
+    
+    def compute_ged(self):
+        return self.ged_layer(self.ntn_score_onlyp).squeeze()
     
 class CP_Generator(nn.Module):
     def __init__(self, config, n_feat):
