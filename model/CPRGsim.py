@@ -59,7 +59,7 @@ class CPRGsim(nn.Module):
             'mutual_loss': self.mutual_loss(minfo) if self.config.get('use_mutualloss', False) else None,
             'swap_score': self.discriminator(com_1, com_2, pri_2, pri_1) if self.config.get('use_swap', False) else None,
             'prep_num': prep_num if  self.prep_rate > 0.0 else None,
-            'ged': self.discriminator.compute_ged() if self.ppre_rate > 0 else None
+            'ged': self.discriminator.compute_ged_(pri_1, pri_2) if self.ppre_rate > 0 else None
         } 
         return score, reg_dict
 
@@ -212,6 +212,9 @@ class Discriminator(nn.Module):
                                              nn.Linear(self.config['tensor_neurons'] , 1)) 
         self.ppre_rate = self.config.get('ppre_rate', 0.0)
         if self.ppre_rate > 0:
+            self.pp_NTN_list = nn.ModuleList()
+            for i in range(self.num_filter):
+                self.pp_NTN_list.append(TensorNetworkModule(self.config, self.filters[i], neurons))
             self.ged_layer = nn.Sequential(nn.Linear(hiden_neurons, hiden_neurons),
                                             nn.ReLU(),
                                             nn.Linear(hiden_neurons, self.config['tensor_neurons']),
@@ -245,7 +248,14 @@ class Discriminator(nn.Module):
     
     def compute_ged(self):
         return self.ged_layer(self.ntn_score_onlyp).squeeze()
-    
+
+    def compute_ged_(self, pri1, pri2):
+        _ntn_score_onlyp = []
+        for i in range(self.config['NTN_layers']):
+            _ntn_score_onlyp.append(self.pp_NTN_list[i](pri1[i], pri2[i]))
+        _ntn_score_onlyp = torch.cat(_ntn_score_onlyp, dim=-1)
+        return self.ged_layer(_ntn_score_onlyp).squeeze()
+        
 class CP_Generator(nn.Module):
     def __init__(self, config, n_feat):
         super(CP_Generator, self).__init__()

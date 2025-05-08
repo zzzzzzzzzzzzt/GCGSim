@@ -1334,7 +1334,7 @@ if __name__ == "__main__":
     dataset                     = load_data(args, False)
     dataset                     . load(config)
     model                       = CPRGsim(config, dataset.input_dim).cuda()
-    para                        = osp.join(args.pretrain_path, 'CPRGsim_{}_checkpoint_mse.pth'.format(args.dataset))
+    para                        = osp.join(args.pretrain_path, 'CPRGsim_{}_checkpoint.pth'.format(args.dataset))
     model                       . load_state_dict(torch.load(para))
     model                       . eval()
 
