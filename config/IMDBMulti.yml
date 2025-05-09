@@ -62,6 +62,13 @@ CPRGsim:
   use_pripre: False
   norm: True
   use_deepsets: True
+  use_comloss: False
+  use_mutualloss: False
+  use_swap: False
+  swap_rate: 0.0
+  crep_rate: 0.0
+  prep_rate: 0.0
+  ppre_rate: 0.0
   use_ff: True
   num_ff: 1
   sep: True

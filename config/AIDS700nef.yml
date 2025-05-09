@@ -56,9 +56,9 @@ CPRGsim:
   use_mutualloss: False
   use_swap: False
   swap_rate: 0.0
-  crep_rate: 0.0
+  crep_rate: 0.04
   prep_rate: 0.0
-  ppre_rate: 0.001
+  ppre_rate: 0.0001
   use_ff: False
   measure: 'JSD'
   model_name: 'GSC_GNN'
