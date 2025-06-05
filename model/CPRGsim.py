@@ -254,7 +254,7 @@ class Discriminator(nn.Module):
         for i in range(self.config['NTN_layers']):
             _ntn_score_onlyp.append(self.pp_NTN_list[i](pri1[i], pri2[i]))
         _ntn_score_onlyp = torch.cat(_ntn_score_onlyp, dim=-1)
-        return self.ged_layer(_ntn_score_onlyp).squeeze()
+        return torch.sigmoid(self.ged_layer(_ntn_score_onlyp).squeeze())
         
 class CP_Generator(nn.Module):
     def __init__(self, config, n_feat):

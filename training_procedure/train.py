@@ -42,7 +42,8 @@ def train(self, graph_batch, model, loss_func, optimizer, target, dataset = None
             swap_loss = config['mu_weight']*loss_func(reg_dict['swap_score'], target['target'])
             loss += swap_loss
         if ppre_rate > 0:
-            ppre_loss = ppre_rate*loss_func(reg_dict['ged'], target['target_ged'])
+            ged = -torch.log(reg_dict['ged'])*0.5*(graph_batch['n1']+graph_batch['n2'])
+            ppre_loss = ppre_rate*loss_func(ged, target['target_ged'])
             loss += ppre_loss
 
         loss.backward()

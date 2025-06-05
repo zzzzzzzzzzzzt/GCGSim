@@ -184,6 +184,14 @@ class DatasetLocal(dataset):
         new_data["g1"] = batch[0]  # DataBatch(edge_index=[2, 2254], i=[128], x=[1146, 29], num_nodes=1146, batch=[1146], ptr=[129])
         new_data["g2"] = batch[1] 
 
+        n1 = list()
+        n2 = list()
+        for i in range(config['batch_size']):
+            n1.append(list(batch[0].batch).count(i))
+            n2.append(list(batch[1].batch).count(i))
+        new_data['n1'] = torch.tensor(n1).cuda()
+        new_data['n2'] = torch.tensor(n2).cuda()
+
         normalized_ged = self.trainval_nged_matrix[
             batch[0]["i"].reshape(-1).tolist(), batch[1]["i"].reshape(-1).tolist()
         ].tolist()
