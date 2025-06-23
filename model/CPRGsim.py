@@ -75,9 +75,9 @@ class CPRGsim(nn.Module):
         djs_loss = DJSLoss()
         m_loss = 0 
         for i in range(self.num_filter):
-            m_loss_g1_c2 = djs_loss(minfo['g1_c2'][i], minfo['g1_c2_prime'][i])
-            m_loss_g2_c1 = djs_loss(minfo['g2_c1'][i], minfo['g2_c1_prime'][i])
-            m_loss += (m_loss_g1_c2 + m_loss_g2_c1)/2
+            m_loss_1 = djs_loss(minfo['g1_c1'][i], minfo['g1_c1_prime'][i])
+            m_loss_2 = djs_loss(minfo['g2_c2'][i], minfo['g2_c2_prime'][i])
+            m_loss += (m_loss_1 + m_loss_2)/2
         
         return m_loss/self.num_filter
     
@@ -782,33 +782,32 @@ class StatisticsNetwork(nn.Module):
         self.config = config
         self.filters = self.config['gnn_filters']
         self.num_filter = len(self.filters)
-        self.network_g1_c2 = nn.ModuleList()
-        self.network_g2_c1 = nn.ModuleList()
+        self.network = nn.ModuleList()
         for i in range(self.num_filter):
-            self.network_g1_c2.append(MLPLayers(2*self.filters[i], 
-                                                self.filters[i], 
-                                                1, 
-                                                num_layers=3, 
-                                                use_bn=False))
-            self.network_g2_c1.append(MLPLayers(2*self.filters[i], 
-                                                self.filters[i], 
-                                                1, 
-                                                num_layers=3, 
-                                                use_bn=False))   
+            self.network.append(MLPLayers(2*self.filters[i], 
+                                        self.filters[i], 
+                                        1, 
+                                        num_layers=3, 
+                                        use_bn=False))
     def forward(self, c1, c2, g1, g2):
+        batch_size = c1[0].size(0)
         MInfo = {
-            'g1_c2':[],
-            'g1_c2_prime':[],
-            'g2_c1':[],
-            'g2_c1_prime':[]
+            'g1_c1':[],
+            'g1_c1_prime':[],
+            'g2_c2':[],
+            'g2_c2_prime':[]
         }
         for i in range(self.num_filter):
-            g1_prime = torch.cat([g1[i][1:], g1[i][0].unsqueeze(0)], dim=0)
-            g2_prime = torch.cat([g2[i][1:], g2[i][0].unsqueeze(0)], dim=0)
-            MInfo['g1_c2'].append(self.network_pass(g1[i], c2[i], self.network_g1_c2[i]))
-            MInfo['g1_c2_prime'].append(self.network_pass(g1_prime, c2[i], self.network_g1_c2[i]))
-            MInfo['g2_c1'].append(self.network_pass(g2[i], c1[i], self.network_g2_c1[i]))
-            MInfo['g2_c1_prime'].append(self.network_pass(g2_prime, c1[i], self.network_g2_c1[i]))
+            idx_1 = torch.randperm(batch_size)
+            idx_2 = torch.randperm(batch_size)
+            g1_prime = g1[i][idx_1]
+            g2_prime = g2[i][idx_2]
+            # g1_prime = torch.cat([g1[i][1:], g1[i][0].unsqueeze(0)], dim=0)
+            # g2_prime = torch.cat([g2[i][1:], g2[i][0].unsqueeze(0)], dim=0)
+            MInfo['g1_c1'].append(self.network_pass(g1[i], c1[i], self.network[i]))
+            MInfo['g1_c1_prime'].append(self.network_pass(g1_prime, c1[i], self.network[i]))
+            MInfo['g2_c2'].append(self.network_pass(g2[i], c2[i], self.network[i]))
+            MInfo['g2_c2_prime'].append(self.network_pass(g2_prime, c2[i], self.network[i]))
 
         return MInfo
     def network_pass(self,g ,c, network):

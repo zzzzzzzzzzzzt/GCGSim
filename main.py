@@ -63,7 +63,7 @@ def main(args, config, logger: Logger, run_id: int, dataset: DatasetLocal, date,
             if epoch % 2 == 0:
                 data["g1"], data["g2"] = data["g2"], data["g1"]
             model, loss, com_loss, mutual_loss, swap_loss, ppre_loss \
-                                     = T.train(data, model, loss_func, optimizer, target)                 
+                                     = T.train(data, model, loss_func, optimizer, target, epoch)                 
             loss_sum                 = loss_sum + loss
             com_loss_sum             = com_loss_sum + com_loss
             mutual_loss_sum          = mutual_loss_sum + mutual_loss

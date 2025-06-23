@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch_geometric.transforms as T
 from torch_geometric.nn.conv.gcn_conv import gcn_norm
 import torch
-def train(self, graph_batch, model, loss_func, optimizer, target, dataset = None):
+def train(self, graph_batch, model, loss_func, optimizer, target, epoch):
     model.train(True)
 
     
