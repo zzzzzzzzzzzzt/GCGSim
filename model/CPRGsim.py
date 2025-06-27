@@ -59,7 +59,8 @@ class CPRGsim(nn.Module):
             'mutual_loss': self.mutual_loss(minfo) if self.config.get('use_mutualloss', False) else None,
             'swap_score': self.discriminator(com_1, com_2, pri_2, pri_1) if self.config.get('use_swap', False) else None,
             'prep_num': prep_num if  self.prep_rate > 0.0 else None,
-            'ged': self.discriminator.compute_ged_(pri_1, pri_2) if self.ppre_rate > 0 else None
+            'c_ged': self.discriminator.compute_ged(self.discriminator.ntn_score_onlyc) if self.ppre_rate > 0 else None,
+            'p_ged': self.discriminator.compute_ged(self.discriminator.ntn_score_onlyp) if self.ppre_rate > 0 else None
         } 
         return score, reg_dict
 
@@ -212,14 +213,15 @@ class Discriminator(nn.Module):
                                              nn.Linear(self.config['tensor_neurons'] , 1)) 
         self.ppre_rate = self.config.get('ppre_rate', 0.0)
         if self.ppre_rate > 0:
-            self.pp_NTN_list = nn.ModuleList()
-            for i in range(self.num_filter):
-                self.pp_NTN_list.append(TensorNetworkModule(self.config, self.filters[i], neurons))
+            # self.pp_NTN_list = nn.ModuleList()
+            # for i in range(self.num_filter):
+            #     self.pp_NTN_list.append(TensorNetworkModule(self.config, self.filters[i], neurons))
             self.ged_layer = nn.Sequential(nn.Linear(hiden_neurons, hiden_neurons),
                                             nn.ReLU(),
                                             nn.Linear(hiden_neurons, self.config['tensor_neurons']),
                                             nn.ReLU(),
-                                            nn.Linear(self.config['tensor_neurons'] , 1))
+                                            nn.Linear(self.config['tensor_neurons'] , 1),
+                                            nn.ReLU())
     def forward(self, com_1, com_2, pri_1, pri_2):
         return self.compute_ntn_score(com_1, com_2, pri_1, pri_2)
     
@@ -236,18 +238,22 @@ class Discriminator(nn.Module):
                                             )
         else:
             ntn_score = []
+            _ntn_score_onlyc = []
             _ntn_score_onlyp = []
             for i in range(self.config['NTN_layers']):
                 c_ntn_score = self.c_NTN_list[i](common_feature_1[i], common_feature_2[i])
                 p_ntn_score = self.p_NTN_list[i](private_feature_1[i], private_feature_2[i])
-                ntn_score.append(torch.cat([c_ntn_score, p_ntn_score], dim=-1))
+
+                _ntn_score_onlyc.append(c_ntn_score)
                 _ntn_score_onlyp.append(p_ntn_score)
-            ntn_score = torch.cat(ntn_score, dim=-1)
-            self.ntn_score_onlyp = torch.cat(_ntn_score_onlyp, dim=-1)  
+
+            self.ntn_score_onlyc = torch.cat(_ntn_score_onlyc, dim=-1)   
+            self.ntn_score_onlyp = torch.cat(_ntn_score_onlyp, dim=-1)
+            ntn_score = torch.cat([self.ntn_score_onlyc, self.ntn_score_onlyp], dim=-1)
         return torch.sigmoid(self.score_sim_layer(ntn_score).squeeze())
     
-    def compute_ged(self):
-        return self.ged_layer(self.ntn_score_onlyp).squeeze()
+    def compute_ged(self, ntn_score):
+        return self.ged_layer(ntn_score).squeeze()
 
     def compute_ged_(self, pri1, pri2):
         _ntn_score_onlyp = []

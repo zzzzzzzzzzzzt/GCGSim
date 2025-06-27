@@ -58,7 +58,7 @@ CPRGsim:
   swap_rate: 0.0
   crep_rate: 0.0
   prep_rate: 0.0
-  ppre_rate: 0.0
+  ppre_rate: 0.0001
   use_ff: False
   measure: 'JSD'
   model_name: 'GSC_GNN'
