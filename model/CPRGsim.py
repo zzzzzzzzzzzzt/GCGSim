@@ -90,15 +90,15 @@ class CPRGsim(nn.Module):
         return pri_1, pri_2, end
     
     def batch_replicate(self, feature_1, feature_2, rate, start):
-        _rate = rate/2
+        _rate = rate
         rep_num = int(self.config['batch_size']*_rate)
         end1 = start-rep_num if start else -rep_num
-        end2 = end1-rep_num
+        # end2 = end1-rep_num
         for i in range(self.num_filter):
             feature_1[i][end1:start] = feature_2[i][end1:start].clone()
-            feature_2[i][end2:end1] = feature_1[i][end2:end1].clone()
+            # feature_2[i][end2:end1] = feature_1[i][end2:end1].clone()
         
-        return feature_1, feature_2, end2
+        return feature_1, feature_2, end1
     
     def exbatch_pri(self, feature_1, feature_2):
         for i in range(self.num_filter):
