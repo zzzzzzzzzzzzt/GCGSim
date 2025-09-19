@@ -25,7 +25,7 @@ CPRGsim:
   feat_norm: False
   synth: False
   scale: 1
-  gnn_encoder: 'GIN'
+  gnn_encoder: 'RGGC'
   graph_encoder: 'deepset'
   multi_contrast: False
   gnn_filters: [64, 64, 32, 16]

@@ -3,7 +3,7 @@ from platform import node
 from gpustat import print_gpustat
 import torch
 import torch.nn as nn
-from torch_geometric.nn import GCNConv, GINConv, GATConv
+from torch_geometric.nn import GCNConv, GINConv, GATConv, ResGatedGraphConv
 import torch.nn.functional as F   
 from torch_geometric.nn.glob import global_add_pool, global_mean_pool
 from model.layers import AttentionModule, MLPLayers, TensorNetworkModule, FF, GlobalContextAware, Node2GraphAttention, MLP, FFNGIN
@@ -312,6 +312,12 @@ class CP_Generator(nn.Module):
             self.gnn_list.append(GATConv(self.n_feat, self.filters[0]))
             for i in range(self.num_filter-1):   # num_filter = 3    i = 0,1   
                 self.gnn_list.append(GATConv(self.filters[i],self.filters[i+1]))  
+        elif self.gnn_enc           == "RGGC":
+            self.embedding = nn.Linear(self.n_feat, self.filters[0])
+            self.gnn_list.append(ResGatedGraphConv(self.filters[0], self.filters[0], act=torch.nn.Sigmoid())) 
+            for i in range(self.num_filter-1):   # num_filter = 3    i = 0,1   
+                self.gnn_list.append(ResGatedGraphConv(self.filters[i],self.filters[i+1], act=torch.nn.Sigmoid()))
+
         elif self.gnn_enc           == 'GIN':
             self.embedding = nn.Linear(self.n_feat, self.filters[0])
             self.gnn_list.append(GINConv(torch.nn.Sequential(
@@ -415,7 +421,7 @@ class CP_Generator(nn.Module):
         g1_pool                     = list()
         g2_pool                     = list()
 
-        if self.gnn_enc             == 'FFNGIN' or 'GIN':
+        if self.gnn_enc             == 'FFNGIN' or 'GIN' or 'RGGC':
             conv_source_1            = self.embedding(conv_source_1)
             conv_source_2            = self.embedding(conv_source_2)
         for i in range(self.num_filter):

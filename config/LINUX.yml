@@ -64,9 +64,9 @@ CPRGsim:
   use_mutualloss: False
   use_swap: False
   swap_rate: 0.0
-  crep_rate: 0.0
+  crep_rate: 0.02
   prep_rate: 0.0
-  ppre_rate: 0.0
+  ppre_rate: 0.0001
   use_ff: False
   sep: False
   measure: 'JSD'
@@ -87,6 +87,6 @@ CPRGsim:
   rho_weight: 1.0
   schedule_start: -1
   detach: False
-  ngsa: True
+  ngsa: False
   neurons: False
   psatype: 'cos'

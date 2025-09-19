@@ -1351,5 +1351,5 @@ if __name__ == "__main__":
     # compri_sim(ground_truth_ged, graph_embs_dicts)
     # compri_dist_l2(ground_truth_ged, graph_embs_dicts, dataset)
     # nodecp_sim_matrix_hist_heat(prediction_mat, graph_embs_dicts, node_embs_dicts)
-
-    cpembedding_singular(graph_embs_dicts)
+    draw_ranking(args, dataset.testing_graphs, dataset.trainval_graphs, prediction_mat, None, model_path='', plot_node_ids=args.dataset=='AIDS700nef')
+    # cpembedding_singular(graph_embs_dicts)

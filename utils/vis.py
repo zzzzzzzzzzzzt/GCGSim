@@ -12,6 +12,7 @@ from colour import Color
 import numpy as np
 from torch_geometric.utils import to_networkx
 import os
+from matplotlib.gridspec import GridSpec
 
 def set_node_attr(g, types):
     node_attr = dict()

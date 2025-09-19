@@ -9,6 +9,8 @@ from torch_geometric.utils import degree
 from torch_geometric.loader import DataLoader
 import numpy as np
 from .CustomDataset import GEDDataset_Custom
+from .mydataset import MyGEDDataset
+from .data_utils import random_walk_positional_encoding
 
 class DatasetLocal(dataset):
     data = None
@@ -71,7 +73,8 @@ class DatasetLocal(dataset):
         self.ged_max                 = torch.max(self.trainval_ged_matrix[self.trainval_ged_matrix != float('inf')])
         self.ged_min                 = torch.min(self.trainval_ged_matrix)
 
-
+        # for i in range(len(self.testing_graphs)):
+        #     random_walk_positional_encoding(self.trainval_graphs[i], walk_length=5)
         # if config['use_val']:
         #     self.validation_triples = self.load_val_train_pairs()
 
