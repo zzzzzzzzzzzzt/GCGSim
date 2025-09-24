@@ -34,7 +34,7 @@ def set_node_attr(g, types):
 
 
 def vis_small(q=None, gs=None, info_dict=None, types = None):
-    plt.figure(figsize=(8, 3))
+    fig = plt.figure(figsize=(9, 3))
     _info_dict_preprocess(info_dict)
     nx_q = to_networkx(q, to_undirected=True)
     
@@ -46,25 +46,29 @@ def vis_small(q=None, gs=None, info_dict=None, types = None):
         nx_gs.append(nx_g)
 
     # get num
-    graph_num = 1 + len(nx_gs)   
+    graph_num = 2 + len(nx_gs)   
     plot_m, plot_n = _calc_subplot_size_small(graph_num)  
 
     # draw query graph
     # info_dict['each_graph_text_font_size'] = 9
-    ax = plt.subplot(plot_m, plot_n, 1)
-
-    draw_graph_small(nx_q, info_dict)
-
-    draw_extra(0, ax, info_dict,
-               _list_safe_get(info_dict['each_graph_text_list'], 0, ""))
+    ax_q, ax_p, grid= set_ax(plot_m, plot_n, fig)# ax = plt.subplot(plot_m, plot_n, 1)
+    draw_graph_small(nx_q, info_dict, ax_q,)
+    draw_extra(0, ax_q, info_dict,
+               _list_safe_get(info_dict['each_graph_title_list'], 0, ""), 'title')
 
     # draw graph candidates
     # info_dict['each_graph_text_font_size'] = 12
     for i in range(len(nx_gs)):
-        ax = plt.subplot(plot_m, plot_n, i + 2)
-        draw_graph_small(nx_gs[i], info_dict)
-        draw_extra(i, ax, info_dict,
-                   _list_safe_get(info_dict['each_graph_text_list'], i + 1, ""))
+        # ax = plt.subplot(plot_m, plot_n, i + 2)
+        m = i//(plot_n-1)
+        n = i%(plot_n-1)
+        draw_graph_small(nx_gs[i], info_dict, ax_p[m][n])
+        draw_extra(i, ax_p[m][n], info_dict,
+                _list_safe_get(info_dict['each_graph_text_list'], i , ""), 'text')
+        if m == 0:
+            draw_extra(i, ax_p[m][n], info_dict,
+                    _list_safe_get(info_dict['each_graph_title_list'], i+1 , ""), 'title')
+
 
     # plot setting
     # plt.tight_layout()
@@ -80,11 +84,17 @@ def vis_small(q=None, gs=None, info_dict=None, types = None):
 
     plt.subplots_adjust(left=left, bottom=bottom, right=right, top=top,
                         wspace=wspace, hspace=hspace)
-
+    draw_bottom_title(fig, grid, info_dict)
+    axq_adjust(ax_q)
     # save / display
     _save_figs(info_dict)
+    pass
 
 
+
+def axq_adjust(ax_q):
+    l, b, w, h = ax_q.get_position().bounds
+    ax_q.set_position((l, b+h*0.25, w, h*0.4))
 
 def _get_line_width(g):
     lw = 5.0 * np.exp(-0.05 * g.number_of_edges())
@@ -96,8 +106,20 @@ def _get_edge_width(g, info_dict):
     ew = ew * np.exp(-0.0015 * g.number_of_edges())
     return info_dict.get('edge_weights', [ew] * len(g.edges()))
 
+def set_ax(m, n, fig):
+    grid = GridSpec(m, n, figure=fig)
+    ax_q = fig.add_subplot(grid[:, 0])
+    ax_q.axis("off")
 
-def draw_graph_small(g, info_dict):
+    ax_p = [['' for _ in range(n-1)] for _ in range(m)]
+    for i in range(m):
+        for j in range(n-1):
+            ax_p[i][j] = fig.add_subplot(grid[i, j+1])
+            ax_p[i][j].axis("off")
+
+    return ax_q, ax_p, grid
+
+def draw_graph_small(g, info_dict, ax, scale_factor=None):
     if g is None:
         return
     if g.number_of_nodes() > 1000:
@@ -112,13 +134,12 @@ def draw_graph_small(g, info_dict):
         if not info_dict['show_labels']:
             node_labels[key] = ''
     # print(pos)
-    nx.draw_networkx(g, pos, nodelist=pos.keys(),
+    nx.draw_networkx(g, pos, ax= ax, nodelist=pos.keys(),
                      node_color=color_values, with_labels=True,
                      node_size=_get_node_size(g, info_dict),
                      labels=node_labels,
                      font_size=info_dict['draw_node_label_font_size'],
                      linewidths=_get_line_width(g), width=_get_edge_width(g, info_dict))
-
     if info_dict['draw_edge_label_enable'] == True:
         edge_labels = nx.get_edge_attributes(g, info_dict['edge_label_name'])
         nx.draw_networkx_edge_labels(g, pos, edge_labels=edge_labels,
@@ -176,15 +197,32 @@ def _calc_subplot_size_small(area):
     w = int(area)
     return [2, math.ceil(w / 2)]
 
-
-def draw_extra(i, ax, info_dict, text):
-    left = _list_safe_get(info_dict['each_graph_text_pos'], 0, 0.5)
-    bottom = _list_safe_get(info_dict['each_graph_text_pos'], 1, 0.8)
+def draw_extra(i, ax, info_dict, text, text_or_title):
+    if text_or_title == 'text':
+        x = _list_safe_get(info_dict['each_graph_text_pos'], 0, 0.5)
+        y = _list_safe_get(info_dict['each_graph_text_pos'], 1, 0.8)
+    elif text_or_title == 'title':
+        x = _list_safe_get(info_dict['each_graph_title_pos'], 0, 0.5)
+        y = _list_safe_get(info_dict['each_graph_title_pos'], 1, 0.8)
     # print(left, bottom)
-    ax.title.set_position([left, bottom])
-    ax.set_title(text, fontsize=info_dict['each_graph_text_font_size'])
+    ax.text(x, y, text, fontsize=info_dict['each_graph_text_font_size'], ha='center', transform=ax.transAxes)
     plt.axis('off')
 
+def draw_bottom_title(fig, gs, info_dict):
+    x = _list_safe_get(info_dict['each_graph_text_from_pos'], 0, 0.5)
+    y = _list_safe_get(info_dict['each_graph_text_from_pos'], 1, 0.8)    
+    ax_gt = fig.add_subplot(gs[0, 1:-1])
+    ax_gt.axis("off")  # 隐藏轴的边框和刻度
+    ax_gt.text(x, y, 
+            info_dict['each_graph_text_from_gt'], 
+            fontsize=info_dict['each_graph_text_font_size'], 
+            ha='center', transform=ax_gt.transAxes)
+    ax_pred = fig.add_subplot(gs[1, 1:-1])
+    ax_pred.axis("off")  # 隐藏轴的边框和刻度
+    ax_pred.text(x, y, 
+            info_dict['each_graph_text_from_pred'], 
+            fontsize=info_dict['each_graph_text_font_size'], 
+            ha='center', transform=ax_pred.transAxes)
 def _list_safe_get(l, index, default):
     try:
         return l[index]

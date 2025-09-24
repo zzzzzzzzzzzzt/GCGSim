@@ -1097,11 +1097,59 @@ def visualize_embeddings_binary(args, testing_graphs, trainval_graphs, model: GS
 
 
 def get_text_label_for_ranking(ds_metric, qid, j, norm, is_query, dataset,
-                               gids_groundtruth, plot_gids, normed_matrix, unnormed_matrix):
+                               ranktype, rank, score_matrix, unnormed_matrix=None, normed_matrix=None, type='metric'):
     # norm = True
     rtn = ''
-    gid = gids_groundtruth[j]
-    if ds_metric == 'ged':  # here
+    gid = rank[j]
+    if type == 'metric':
+        if ds_metric == 'ged':  # here
+            if norm:
+                ds_label = 'nGED'
+            else:
+                ds_label = 'GED'
+        elif ds_metric == 'glet':
+            ds_label = 'glet'
+        elif ds_metric == 'mcs':
+            if norm:
+                ds_label = 'nMCS'
+            else:
+                ds_label = 'MCS'
+        else:
+            raise NotImplementedError()
+        if is_query:  
+            if ds_metric == 'mcs':
+                rtn += '{} by\n'.format(ds_label)  # nGED by \n A*
+            else:
+                if 'AIDS' in dataset or dataset == 'LINUX':
+                    rtn += '{} by\nA*'.format(ds_label)
+                else:
+                    # rtn += '{} by Beam-\nHungarian-VJ'.format(ds_label)
+                    rtn += '{} by \nB-H-V'.format(ds_label)
+        else:  # 
+            if ranktype== 'gt':
+                if norm:
+                    ds = normed_matrix[qid][gid]
+                else:
+                    ds = unnormed_matrix[qid][gid]
+            elif ranktype== 'pred':
+                if norm:
+                    ds = -1 * np.log(score_matrix[qid][gid])
+                else:
+                    raise NotImplementedError()
+            rtn = '{:.2f}'.format(ds)
+    elif type == 'rank':
+        if j == len(rank) - 3:
+            rtn = '... rank {} ...'.format(int(len(unnormed_matrix[0]) / 2))
+        elif j == len(rank) - 2:
+            rtn = 'rank {}'.format(int(len(unnormed_matrix[0])-1))
+        elif j == len(rank) - 1:
+            rtn = 'rank {}'.format(int(len(unnormed_matrix[0])))
+        else:
+            rtn = 'rank {}'.format(str(j + 1))
+    return rtn
+
+def get_text_metric_from(ds_metric, norm):
+    if ds_metric == 'ged':
         if norm:
             ds_label = 'nGED'
         else:
@@ -1115,38 +1163,7 @@ def get_text_label_for_ranking(ds_metric, qid, j, norm, is_query, dataset,
             ds_label = 'MCS'
     else:
         raise NotImplementedError()
-    if is_query:  
-        if ds_metric == 'mcs':
-            rtn += '{} by\n'.format(ds_label)  # nGED by \n A*
-        else:
-            if 'AIDS' in dataset or dataset == 'LINUX':
-                rtn += '{} by\nA*'.format(ds_label)
-            else:
-                # rtn += '{} by Beam-\nHungarian-VJ'.format(ds_label)
-                rtn += '{} by \nB-H-V'.format(ds_label)
-    else:  # 
-        ds_str = 'ged'
-        # ds_str, ged_sim = r.dist_sim(qid, gid, norm)
-        ged_sim        = normed_matrix[qid][gid]  # q 和g 的预测nged
-        if ds_str == 'ged':
-            ged_str = get_ged_select_norm_str(unnormed_matrix, normed_matrix, qid, gid, norm)
-            if j == len(gids_groundtruth) - 3:
-                rtn = '\n ... rank {} ...\n{}'.format(int(len(unnormed_matrix[0]) / 2), ged_str.split('(')[0])
-            elif j == len(gids_groundtruth) - 2:
-                rtn = '\n rank {}\n{}'.format(int(len(unnormed_matrix[0])-1), ged_str.split('(')[0])
-            elif j == len(gids_groundtruth) - 1:
-                rtn = '\n rank {}\n{}'.format(int(len(unnormed_matrix[0])), ged_str.split('(')[0])
-            else:
-                rtn = '\n rank {}\n{}'.format(str(j + 1), ged_str.split('(')[0])
-            # if gid != gids_groundtruth[5]:
-            #     rtn += '\n {}'.format(ged_str.split('(')[0])
-            # else:
-            #     rtn += '\n ...   {}   ...'.format(ged_str.split('(')[0])
-        else:
-            rtn += '\n {:.2f}'.format(ged_sim)  # in case it is a numpy.float64, use float()
-    if plot_gids:
-        rtn += '\nid: {}'.format(gid)
-    return rtn
+    return ds_label
 
 def get_ged_select_norm_str(unnormed_matrix,normed_matrix, qid, gid, norm):
     # ged = r.dist_sim(qid, gid, norm=False)[1]
@@ -1174,7 +1191,7 @@ def set_save_paths_for_vis(info_dict, extra_dir, fn, plt_cnt):
     plt_cnt += 1
     return info_dict, plt_cnt
 
-def draw_ranking(args, testing_graphs, trainval_graphs, pred_mat , pred_mat_unexp, existing_mappings = None, plot_gids=False, verbose=True, plot_max_num=np.inf, model_path = None, color = True, plot_node_ids = True):
+def draw_ranking(args, testing_graphs, trainval_graphs, gt, gt_GED, gt_nGED, pred_mat, pred_mat_unexp, existing_mappings = None, plot_gids=False, verbose=True, plot_max_num=np.inf, model_path = None, color = True, plot_node_ids = True):
     plot_what = 'ranking'
     concise = True
     c = None
@@ -1209,12 +1226,14 @@ def draw_ranking(args, testing_graphs, trainval_graphs, pred_mat , pred_mat_unex
         # graph text info config
         'each_graph_text_list': [],
         'each_graph_text_font_size': 10,
-        'each_graph_text_pos': [0.5, 1.05],
+        'each_graph_title_pos': [0.5, 1.1],
+        'each_graph_text_pos': [0.5, -0.2],
+        'each_graph_text_from_pos': [0.5, -0.4],
         # graph padding: value range: [0, 1]
-        'top_space': 0.20 if concise else 0.26,  # out of whole graph
-        'bottom_space': 0.05,
-        'hbetween_space': 0.6 if concise else 1,  # out of the subgraph
-        'wbetween_space': 0,
+        'top_space': 0.1 if concise else 0.26,  # out of whole graph
+        'bottom_space': 0.15,
+        'hbetween_space': 0.5 if concise else 1,  # out of the subgraph
+        'wbetween_space': 0.01,
         # plot config
         'plot_dpi': 200,
         'plot_save_path_eps': '',
@@ -1223,7 +1242,7 @@ def draw_ranking(args, testing_graphs, trainval_graphs, pred_mat , pred_mat_unex
     }
     plt_cnt = 0
     all_graphs = testing_graphs + trainval_graphs
-    ground_truth_ged , ground_truth_nged, sort_id_mat, sort_id_mat_normed = get_true_result(all_graphs, testing_graphs, trainval_graphs)
+    # ground_truth_ged , ground_truth_nged, sort_id_mat, sort_id_mat_normed = get_true_result(all_graphs, testing_graphs, trainval_graphs)
     pred_ids_rank = get_pred_result(pred_mat)  # sim from big to small 
     for i in range(len(testing_graphs)):
         q = testing_graphs[i]
@@ -1235,41 +1254,37 @@ def draw_ranking(args, testing_graphs, trainval_graphs, pred_mat , pred_mat_unex
         selected_ids = list(range(5))  
         selected_ids.extend([middle_idx, -2, -1])   
         # Get the selected graphs from the groundtruth and the model.
+        sort_id_mat_normed = np.argsort(gt_nGED, kind = 'mergesort')
         gids_groundtruth = np.array(sort_id_mat_normed[i][selected_ids])   
         gids_rank = np.array(pred_ids_rank[i][selected_ids])              
         # Top row graphs are only the groundtruth outputs.
         gs_groundtruth = [trainval_graphs[j] for j in gids_groundtruth]  # 
         # Bottom row graphs are the query graph + model ranking.
-        gs_rank = [testing_graphs[i]] 
+        gs_rank = [] 
         gs_rank = gs_rank + [trainval_graphs[j] for j in gids_rank]  
         gs = gs_groundtruth + gs_rank  
 
         # Create the plot labels.
         text = []
-        # First label is the name of the groundtruth algorithm, rest are scores for the graphs.
-        text.append('Query')# text += [get_text_label_for_ranking('ged', i, i, True, True, args.dataset, gids_groundtruth, plot_gids, ground_truth_nged, ground_truth_ged)]
         text += [get_text_label_for_ranking(
-                            'ged', i, j, True, False, args.dataset, gids_groundtruth, plot_gids, ground_truth_nged, ground_truth_ged)
+                            'ged', i, j, True, False, args.dataset, 'gt', gids_groundtruth, gt, gt_GED, gt_nGED, type='metric')
                             for j in range(len(gids_groundtruth))]
-        # Start bottom row labels, just ranked from 1 to N with some fancy formatting.
-        # granu_label = 'similarity'.title() if verbose else 'Rank'
-        text.append('Query') # text.append("{} \n {} by {}".format(granu_label, 'Rank', args.model_name))
-        for j in range(len(gids_rank)):
-            # ds = format_ds(pred_r.pred_ds(i, gids_rank[j], ds_norm))
-            ds = -1 * np.log(pred_mat[i][gids_rank[j]])
-            optional = '\n{:.2f}'.format(ds) if verbose else ''
-            if j == len(gids_rank) - 3:
-                rtn = '\n ... rank {} ...{}'.format(int(len(trainval_graphs) / 2), optional)
-            elif j == len(gids_rank) - 2:
-                rtn = '\n rank {}{}'.format(int(len(trainval_graphs)-1), optional)
-            elif j == len(gids_rank) - 1:
-                rtn = '\n rank {}{}'.format(int(len(trainval_graphs)), optional)
-            else:
-                rtn = '\n rank {}{}'.format(str(j + 1), optional)
-            # rtn = '\n {}: {:.2f}'.format('sim', pred_r.sim_mat_[i][j])
-            text.append(rtn)       
-        # Perform the visualization.
+        text += [get_text_label_for_ranking(
+                            'ged', i, j, True, False, args.dataset, 'pred', gids_rank, pred_mat, type='metric')
+                            for j in range(len(gids_rank))]
         info_dict['each_graph_text_list'] = text
+
+        text = []
+        text.append('Query')
+        text += [get_text_label_for_ranking(
+                    'ged', i, j, True, False, args.dataset, None, gids_groundtruth, gt, gt_GED, gt_nGED, type='rank')
+                    for j in range(len(gids_rank))]
+        info_dict['each_graph_title_list'] = text
+
+        text_metric = get_text_metric_from('ged', True)
+        info_dict['each_graph_text_from_gt'] = 'Ground-truth {}'.format(text_metric)
+        info_dict['each_graph_text_from_pred'] = 'Predicted {} by {}'.format(text_metric, args.model_name)
+
         fn = '{}_{}_{}{}'.format(
             plot_what, 'astar', int(testing_graphs[i]['i']), get_norm_str(True))  # ranking_astar_i_norm
         info_dict, plt_cnt = set_save_paths_for_vis(
@@ -1351,5 +1366,5 @@ if __name__ == "__main__":
     # compri_sim(ground_truth_ged, graph_embs_dicts)
     # compri_dist_l2(ground_truth_ged, graph_embs_dicts, dataset)
     # nodecp_sim_matrix_hist_heat(prediction_mat, graph_embs_dicts, node_embs_dicts)
-    draw_ranking(args, dataset.testing_graphs, dataset.trainval_graphs, prediction_mat, None, model_path='', plot_node_ids=args.dataset=='AIDS700nef')
+    draw_ranking(args, dataset.testing_graphs, dataset.trainval_graphs, ground_truth, ground_truth_ged, ground_truth_nged, prediction_mat, None, model_path='', plot_node_ids=args.dataset=='AIDS700nef')
     # cpembedding_singular(graph_embs_dicts)
