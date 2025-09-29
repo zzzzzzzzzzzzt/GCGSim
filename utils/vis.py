@@ -13,6 +13,7 @@ import numpy as np
 from torch_geometric.utils import to_networkx
 import os
 from matplotlib.gridspec import GridSpec
+from curlyBrace.curlyBrace import curlyBrace
 
 def set_node_attr(g, types):
     node_attr = dict()
@@ -30,7 +31,74 @@ def set_node_attr(g, types):
             node_attr[i]['type'] = None
     return node_attr
 
+def vis_graph_pair(g1, g2, info_dict, types, node1_maplist=None, node2_maplist=None):
+    nx_g1 = to_networkx(g1, to_undirected=True)
+    nx_g2 = to_networkx(g2, to_undirected=True)
+    nx.set_node_attributes(nx_g1, set_node_attr(g1, types))
+    nx.set_node_attributes(nx_g2, set_node_attr(g2, types))
 
+    n = 1 + len(node1_maplist) if node1_maplist is not None else 1
+    subplot_size = info_dict['subplot_size']
+    wsize = info_dict['wbetween_space']*subplot_size
+    hszie = info_dict['hbetween_space']*subplot_size
+    fig_width = (subplot_size * n + wsize * n + subplot_size*info_dict['bar_sie'])/(info_dict['right_space'] - info_dict['left_space'])
+    fig_hight = (subplot_size * 2 + hszie *2 + subplot_size*info_dict['curlyBrace_size'])/(1 - info_dict['top_space'] - info_dict['bottom_space'])
+
+    wspace = wsize *(n+1) / (subplot_size * (n+info_dict['bar_sie']))
+    hspace = hszie *(2+1) / (subplot_size * (2+info_dict['curlyBrace_size']))
+    
+    gs = GridSpec(3, n+1, width_ratios=[1]*n + [info_dict['bar_sie']], height_ratios=[1, 1, info_dict['curlyBrace_size']],
+                  wspace=wspace, hspace=hspace,
+                  bottom=info_dict['bottom_space'], top=1-info_dict['top_space'],
+                  left=info_dict['left_space'], right=info_dict['right_space'])
+    fig = plt.figure(figsize=(fig_width, fig_hight))
+
+    for i in range(n):
+        ax_up = fig.add_subplot(gs[0, i])
+        ax_down = fig.add_subplot(gs[1, i])
+        ax_up.axis('off')
+        ax_down.axis('off')
+        if i == 0:
+            ifmap=False
+        else:
+            ifmap=True
+        draw_graph_small(nx_g1, info_dict, ax_up, ifmap, node1_maplist[i-1])
+        draw_graph_small(nx_g2, info_dict, ax_down, ifmap, node2_maplist[i-1])
+        if i > 0:
+            draw_extra(i, ax_up, info_dict,
+                        _list_safe_get(info_dict['each_graph_title_list'], i-1 , ""), 'title')
+
+    
+    
+    brace_ax = fig.add_subplot(gs[2, 1:5])
+    origraph_ax = fig.add_subplot(gs[2, 0])
+    brace_ax.axis('off')
+    origraph_ax.axis('off')
+
+    add_colorbar_to_fig(fig, gs, info_dict['draw_node_color_mapdcit'], 
+                        label_default=info_dict['bar_text'], 
+                        tick_label_size=info_dict['bar_text_font_size'])
+    pos = brace_ax.get_position()
+    # right_pos = brace_ax.get_position()
+    brace_ax.set_xlim(pos.x1, pos.x0)
+    curlyBrace(fig, brace_ax, 
+                (pos.x1, pos.y1),
+                (pos.x0, pos.y1), 
+               k_r=0.2, color='black', linewidth=1)
+    
+    x = _list_safe_get(info_dict['each_graph_text_pos'], 0, 0.5)
+    y = _list_safe_get(info_dict['each_graph_text_pos'], 1, 0.8)  
+    origraph_ax.text(x, y, 
+            info_dict['each_graph_text_list'][0], 
+            fontsize=info_dict['each_graph_text_font_size'], 
+            ha='center', transform=origraph_ax.transAxes)
+    brace_ax.text(x, y, 
+            info_dict['each_graph_text_list'][1], 
+            fontsize=info_dict['each_graph_text_font_size'], 
+            ha='center', transform=brace_ax.transAxes)    
+    _save_figs(info_dict)
+    pass
+        
 
 
 def vis_small(q=None, gs=None, info_dict=None, types = None):
@@ -51,7 +119,7 @@ def vis_small(q=None, gs=None, info_dict=None, types = None):
 
     # draw query graph
     # info_dict['each_graph_text_font_size'] = 9
-    ax_q, ax_p, grid= set_ax(plot_m, plot_n, fig)# ax = plt.subplot(plot_m, plot_n, 1)
+    ax_q, ax_p, grid= set_ax(plot_m, plot_n, fig) # ax = plt.subplot(plot_m, plot_n, 1)
     draw_graph_small(nx_q, info_dict, ax_q,)
     draw_extra(0, ax_q, info_dict,
                _list_safe_get(info_dict['each_graph_title_list'], 0, ""), 'title')
@@ -119,7 +187,7 @@ def set_ax(m, n, fig):
 
     return ax_q, ax_p, grid
 
-def draw_graph_small(g, info_dict, ax, scale_factor=None):
+def draw_graph_small(g, info_dict, ax, ifmap=None, maplist=None):
     if g is None:
         return
     if g.number_of_nodes() > 1000:
@@ -127,11 +195,14 @@ def draw_graph_small(g, info_dict, ax, scale_factor=None):
             g.number_of_nodes()))
         return
     pos = _sorted_dict(graphviz_layout(g))
-    color_values = _get_node_colors(g, info_dict)
+    if not ifmap:
+        color_values = _get_node_colors(g, info_dict)
+    else:
+        color_values = _get_node_map_colors(g, info_dict,maplist)
     node_labels = _sorted_dict(nx.get_node_attributes(g, info_dict['node_label_type']))
-    for key, value in node_labels.items():
-        # Labels are not shown, but if the ids want to be plotted, then they are shown.
-        if not info_dict['show_labels']:
+
+    if not info_dict['show_labels'] or ifmap:
+        for key, value in node_labels.items():
             node_labels[key] = ''
     # print(pos)
     nx.draw_networkx(g, pos, ax= ax, nodelist=pos.keys(),
@@ -167,9 +238,41 @@ def _get_node_colors(g, info_dict):
             color_values.append(color)
     else:
         # color_values = ['lightskyblue'] * g.number_of_nodes()
-        color_values = ['#CCCCCC'] * g.number_of_nodes()
+        color_values = info_dict['draw_node_color_map'] * g.number_of_nodes()
     # print(color_values)
     return color_values
+
+def add_colorbar_to_fig(fig, gs, cmap, label_default, tick_label_size):
+    if cmap is not None:
+        # 创建颜色条轴（横跨两行）
+        cbar_ax = fig.add_subplot(gs[0:2, -1])
+        
+        # 创建ScalarMappable对象关联颜色映射
+        sm = plt.cm.ScalarMappable(cmap=cmap)
+        sm.set_array([])  # 只需要颜色映射，不需要实际数据
+        
+        # 添加颜色条
+        cbar = fig.colorbar(
+            sm,
+            cax=cbar_ax,
+            label=label_default
+        )
+
+        cbar.ax.tick_params(labelsize=tick_label_size)
+    return fig
+
+def _get_node_map_colors(g, info_dict, map):
+    if info_dict['get_map_mothed'] == 'cosine':
+        norm = True
+    elif info_dict['get_map_mothed'] == 'dot':
+        norm = False
+    if not norm:
+        max = np.max(map)
+        min = np.min(map)
+        map = [(i - min) / (max - min + 1e-10) for i in map]
+    
+    node_colors = [info_dict['draw_node_color_mapdcit'](val) for val in map]
+    return node_colors
 
 
 def _info_dict_preprocess(info_dict):

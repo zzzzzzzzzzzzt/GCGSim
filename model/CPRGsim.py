@@ -432,15 +432,13 @@ class CP_Generator(nn.Module):
                 conv_source_1       = self.gnn_list[i](conv_source_1, edge_index_1, batch_1)
                 conv_source_2       = self.gnn_list[i](conv_source_2, edge_index_2, batch_2)
 
-            _common_feature_1,  \
-            _common_feature_2,  \
-            _private_feature_1, \
-            _private_feature_2, \
-            _g1_pool,           \
-            _g2_pool            = self.deepset_output(conv_source_1, conv_source_2, batch_1, batch_2, i, True)
+            (_common_feature_1, _common_feature_2,
+             _private_feature_1, _private_feature_2,
+             _g1_pool, _g2_pool, 
+             _deepsets_inner_1, _deepsets_inner_2)            = self.deepset_output(conv_source_1, conv_source_2, batch_1, batch_2, i, True)
 
-            node_feature_1      .append(conv_source_1)
-            node_feature_2      .append(conv_source_2)
+            node_feature_1      .append(_deepsets_inner_1)
+            node_feature_2      .append(_deepsets_inner_2)
             common_feature_1    .append(_common_feature_1)
             common_feature_2    .append(_common_feature_2)
             private_feature_1   .append(_private_feature_1)
@@ -453,6 +451,8 @@ class CP_Generator(nn.Module):
             self.com2_list          = common_feature_2
             self.pri1_list          = private_feature_1
             self.pri2_list          = private_feature_2
+            self.g1_list            = g1_pool
+            self.g2_list            = g2_pool
             self.nod1_list          = self.dense_batch(node_feature_1, batch_1)
             self.nod2_list          = self.dense_batch(node_feature_2, batch_2)
         
@@ -691,10 +691,10 @@ class CP_Generator(nn.Module):
             private_feature_1 = self.act_outer(self.p_deepset_outer[filter_idx](g1_embedding_att))
             private_feature_2 = self.act_outer(self.p_deepset_outer[filter_idx](g2_embedding_att))
 
-        out_1, out_2 = None, None
-        if out:
-            out_1, out_2 = pool_1, pool_2
-        return common_feature_1, common_feature_2, private_feature_1, private_feature_2, out_1, out_2
+        return (common_feature_1, common_feature_2, 
+                private_feature_1, private_feature_2, 
+                pool_1, pool_2,
+                deepsets_inner_1, deepsets_inner_2)
     
     def deepset_output_for1(self, x1, x2, filter_idx, out=False):
         deepsets_inner_1 = self.act_inner(self.deepset_inner[filter_idx](x1))

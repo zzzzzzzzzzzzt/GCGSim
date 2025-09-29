@@ -6,7 +6,7 @@ from model.GSC import GSC
 from model.CPRGsim import CPRGsim
 from argparse import ArgumentParser
 from utils.utils import *
-from utils.vis import vis_small
+from utils.vis import vis_small, vis_graph_pair
 import seaborn as sb
 import matplotlib
 import matplotlib.colors as mcolors
@@ -28,6 +28,7 @@ from collections import OrderedDict, defaultdict
 import os.path as osp
 TRUE_MODEL = 'astar'
 from scipy.stats import spearmanr, kendalltau
+from matplotlib.colors import LinearSegmentedColormap
 
 @torch.no_grad()
 def evaluate(testing_graphs, training_graphs, model, dataset: DatasetLocal, config, emb_log=True):
@@ -38,16 +39,15 @@ def evaluate(testing_graphs, training_graphs, model, dataset: DatasetLocal, conf
     ground_truth_ged               = np.empty((len(testing_graphs), len(training_graphs)))
     ground_truth_nged              = np.empty((len(testing_graphs), len(training_graphs)))
     prediction_mat                 = np.empty((len(testing_graphs), len(training_graphs)))
-    graph_embs_dicts               = dict()
-    node_embs_dicts                = dict()
-    graph_cdistri_dicts            = list()
+    graph_embs                     = dict()
+    node_embs                      = dict()
     for i_filter in range(model.num_filter):
-        graph_embs_dicts[i_filter] = dict()
-        for n in ['com_1', 'com_2', 'pri_1', 'pri_2']:
-            graph_embs_dicts[i_filter][n] = list()
-        node_embs_dicts[i_filter]  = dict()
+        graph_embs[i_filter] = dict()
+        for n in ['com_1', 'com_2', 'pri_1', 'pri_2', 'g1', 'g2']:
+            graph_embs[i_filter][n] = list()
+        node_embs[i_filter]  = dict()
         for n in ['g1', 'g2']:
-            node_embs_dicts[i_filter][n] = list()
+            node_embs[i_filter][n] = list()
 
     rho_list                       = []
     tau_list                       = []
@@ -102,13 +102,23 @@ def evaluate(testing_graphs, training_graphs, model, dataset: DatasetLocal, conf
 
         if emb_log:
             for i_filter in range(model.num_filter):
-                graph_embs_dicts[i_filter]['com_1'].append(model.cp_generator.com1_list[i_filter].cpu().detach().numpy())
-                graph_embs_dicts[i_filter]['com_2'].append(model.cp_generator.com2_list[i_filter].cpu().detach().numpy())             
-                graph_embs_dicts[i_filter]['pri_1'].append(model.cp_generator.pri1_list[i_filter].cpu().detach().numpy())                  
-                graph_embs_dicts[i_filter]['pri_2'].append(model.cp_generator.pri2_list[i_filter].cpu().detach().numpy())
-                node_embs_dicts[i_filter]['g1'].append((model.cp_generator.nod1_list[i_filter][0].cpu().detach().numpy(), model.cp_generator.nod1_list[i_filter][1].cpu().detach().numpy()))
-                node_embs_dicts[i_filter]['g2'].append((model.cp_generator.nod2_list[i_filter][0].cpu().detach().numpy(), model.cp_generator.nod2_list[i_filter][1].cpu().detach().numpy()))
+                graph_embs[i_filter]['com_1'].append(model.cp_generator.com1_list[i_filter].cpu().detach().numpy())
+                graph_embs[i_filter]['com_2'].append(model.cp_generator.com2_list[i_filter].cpu().detach().numpy())             
+                graph_embs[i_filter]['pri_1'].append(model.cp_generator.pri1_list[i_filter].cpu().detach().numpy())                  
+                graph_embs[i_filter]['pri_2'].append(model.cp_generator.pri2_list[i_filter].cpu().detach().numpy())
+                graph_embs[i_filter]['g1'].append(model.cp_generator.g1_list[i_filter][0].cpu().detach().numpy())
+                node_embs[i_filter]['g1'].append(model.cp_generator.nod1_list[i_filter][0][0].cpu().detach().numpy())
         t.update(len(training_graphs))
+
+    if emb_log:
+        for i_filter in range(model.num_filter):    
+            embs = model.cp_generator.nod2_list[i_filter][0].cpu().detach().numpy()
+            masks = model.cp_generator.nod2_list[i_filter][1].cpu().detach().numpy()
+            new_embs = []
+            for emb, mask in zip(embs, masks):
+                new_embs.append(emb[mask])
+            graph_embs[i_filter]['g2'] = model.cp_generator.g2_list[i_filter].cpu().detach().numpy()
+            node_embs[i_filter]['g2'] = new_embs
 
     rho                            = np.mean(rho_list).item()
     tau                            = np.mean(tau_list).item()
@@ -126,7 +136,7 @@ def evaluate(testing_graphs, training_graphs, model, dataset: DatasetLocal, conf
         print("p@20: "           + str(round(test_prec_at_20, 5)) + ".")
     print_evaluation(model_mse_error, rho, tau, prec_at_10, prec_at_20)   
 
-    return scores, ground_truth, ground_truth_ged, ground_truth_nged, prediction_mat, graph_embs_dicts, node_embs_dicts, graph_cdistri_dicts
+    return scores, ground_truth, ground_truth_ged, ground_truth_nged, prediction_mat, graph_embs, node_embs
     
 def loss_sim_distribution(scores, ground_truth_ged, ground_truth, prediction_mat):
     ged_max = int(np.max(ground_truth_ged))
@@ -1096,8 +1106,8 @@ def visualize_embeddings_binary(args, testing_graphs, trainval_graphs, model: GS
         print('Saved {} embedding visualization plots'.format(plt_cnt))
 
 
-def get_text_label_for_ranking(ds_metric, qid, j, norm, is_query, dataset,
-                               ranktype, rank, score_matrix, unnormed_matrix=None, normed_matrix=None, type='metric'):
+def get_text_label_for_ranking(ds_metric, qid, j, norm, is_query, dataset, ranktype, 
+                               rank, score_matrix, unnormed_matrix=None, normed_matrix=None, type='metric', selected_ids=None):
     # norm = True
     rtn = ''
     gid = rank[j]
@@ -1133,19 +1143,27 @@ def get_text_label_for_ranking(ds_metric, qid, j, norm, is_query, dataset,
                     ds = unnormed_matrix[qid][gid]
             elif ranktype== 'pred':
                 if norm:
-                    ds = -1 * np.log(score_matrix[qid][gid])
+                    ds = -1 * np.log(score_matrix[qid][gid]-1e-10)
                 else:
                     raise NotImplementedError()
             rtn = '{:.2f}'.format(ds)
     elif type == 'rank':
+        text = selected_ids[j]+1
         if j == len(rank) - 3:
-            rtn = '... rank {} ...'.format(int(len(unnormed_matrix[0]) / 2))
-        elif j == len(rank) - 2:
-            rtn = 'rank {}'.format(int(len(unnormed_matrix[0])-1))
-        elif j == len(rank) - 1:
-            rtn = 'rank {}'.format(int(len(unnormed_matrix[0])))
+            rtn = '... rank {} ...'.format(text)
         else:
-            rtn = 'rank {}'.format(str(j + 1))
+            rtn = 'rank {}'.format(text)
+    return rtn
+
+def _get_rank_text(rank, rank_list, g2_len):
+    if rank == len(rank_list) - 3:
+        rtn = '{}'.format(int(g2_len / 2))
+    elif rank == len(rank_list) - 2:
+        rtn = '{}'.format(int(g2_len-1))
+    elif rank == len(rank_list) - 1:
+        rtn = '{}'.format(int(g2_len))
+    else:
+        rtn = '{}'.format(str(rank + 1))
     return rtn
 
 def get_text_metric_from(ds_metric, norm):
@@ -1191,7 +1209,7 @@ def set_save_paths_for_vis(info_dict, extra_dir, fn, plt_cnt):
     plt_cnt += 1
     return info_dict, plt_cnt
 
-def draw_ranking(args, testing_graphs, trainval_graphs, gt, gt_GED, gt_nGED, pred_mat, pred_mat_unexp, existing_mappings = None, plot_gids=False, verbose=True, plot_max_num=np.inf, model_path = None, color = True, plot_node_ids = True):
+def draw_ranking(args, testing_graphs, trainval_graphs, gt, gt_GED, gt_nGED, pred_mat, existing_mappings = None, plot_gids=False, verbose=True, plot_max_num=np.inf, model_path = None, color = True, plot_node_ids = True):
     plot_what = 'ranking'
     concise = True
     c = None
@@ -1208,8 +1226,10 @@ def draw_ranking(args, testing_graphs, trainval_graphs, gt, gt_GED, gt_nGED, pre
             color_map = get_color_map(trainval_graphs + testing_graphs, trainval_graphs)
         else:
             color_map = get_color_map(trainval_graphs + testing_graphs, trainval_graphs, use_color=color)
-    else:
-        color_map = None
+    elif args.dataset == 'LINUX':
+        color_map = COLOR1
+    elif args.dataset == 'IMDBMulti':
+        color_map = COLOR2
 
     info_dict = {
         # draw node config
@@ -1225,6 +1245,7 @@ def draw_ranking(args, testing_graphs, trainval_graphs, gt, gt_GED, gt_nGED, pre
         'draw_edge_label_font_size': 6,
         # graph text info config
         'each_graph_text_list': [],
+        'each_graph_title_list': [],
         'each_graph_text_font_size': 10,
         'each_graph_title_pos': [0.5, 1.1],
         'each_graph_text_pos': [0.5, -0.2],
@@ -1252,7 +1273,7 @@ def draw_ranking(args, testing_graphs, trainval_graphs, gt, gt_GED, gt_nGED, pre
             return        
         # Choose the top 6 matches, the overall middle match, and the worst match.
         selected_ids = list(range(5))  
-        selected_ids.extend([middle_idx, -2, -1])   
+        selected_ids.extend([middle_idx, len(trainval_graphs)-2, len(trainval_graphs)-1])   
         # Get the selected graphs from the groundtruth and the model.
         sort_id_mat_normed = np.argsort(gt_nGED, kind = 'mergesort')
         gids_groundtruth = np.array(sort_id_mat_normed[i][selected_ids])   
@@ -1277,7 +1298,8 @@ def draw_ranking(args, testing_graphs, trainval_graphs, gt, gt_GED, gt_nGED, pre
         text = []
         text.append('Query')
         text += [get_text_label_for_ranking(
-                    'ged', i, j, True, False, args.dataset, None, gids_groundtruth, gt, gt_GED, gt_nGED, type='rank')
+                    'ged', i, j, True, False, args.dataset, None, 
+                    gids_groundtruth, gt, gt_GED, gt_nGED, type='rank', selected_ids=selected_ids)
                     for j in range(len(gids_rank))]
         info_dict['each_graph_title_list'] = text
 
@@ -1325,6 +1347,123 @@ def get_color_map(gs, trainval_graphs, use_color = True):
         rtn.update((secondary))
     return rtn
 
+def _get_sim_score_for_embsandemb(embs, emb, method='cosine'):
+    if emb.ndim == 1:
+        emb = emb.reshape(1, -1)
+    dot_product = np.dot(embs, emb.T)  # (n,m) × (m,k) → (n,k)
+    if method == 'dot':
+        return dot_product
+    elif method == 'cosine':
+        norm_embs = np.linalg.norm(embs, axis=1, keepdims=True)  # (n,1)
+        norm_emb = np.linalg.norm(emb, axis=1, keepdims=True)  # (k,1)
+        cosine_similarity = dot_product / (norm_embs * norm_emb.T + 1e-10)
+        return cosine_similarity
+
+def draw_gncm_map(args, testing_graphs, trainval_graphs, 
+                gt_nGED, g_embs, n_embs, 
+                existing_mappings = None, plot_gids=False, verbose=True, plot_max_num=np.inf, model_path = None, color = True, plot_node_ids = True):
+    plot_what = 'gncmmap'
+    extra_dir = osp.join(args.extra_dir, args.dataset, plot_what)
+
+    types = trainval_graphs.types if args.dataset == 'AIDS700nef' else None
+    if args.dataset == 'AIDS700nef':
+        if color:
+            color_map = get_color_map(trainval_graphs + testing_graphs, trainval_graphs)
+        else:
+            color_map = get_color_map(trainval_graphs + testing_graphs, trainval_graphs, use_color=color)
+    elif args.dataset == 'LINUX':
+        color_map = COLOR1
+    elif args.dataset == 'IMDBMulti':
+        color_map = COLOR2
+
+    node_mapdcit = LinearSegmentedColormap('mapdcit', MAPDICT)
+    info_dict = {
+        # draw node config
+        'draw_node_size': 20,
+        'draw_node_label_enable': True,
+        'show_labels': plot_node_ids,
+        'node_label_type': 'label' if plot_node_ids else 'type',
+        'node_label_name': 'type' if args.dataset == 'AIDS700nef' else None,
+        'draw_node_label_font_size': 6,
+        'draw_node_color_map': color_map ,
+        'draw_node_color_mapdcit': node_mapdcit,
+        'get_map_mothed': 'cosine',
+        # draw edge config
+        'draw_edge_label_enable': False,
+        'draw_edge_label_font_size': 6,
+        # graph text info config
+        'each_graph_text_list': [],
+        'each_graph_title_list': [],
+        'each_graph_text_font_size': 10,
+        'each_graph_title_pos': [0.5, 1.05],
+        'each_graph_text_pos': [0.5, -1.36],
+        'bar_text': 'Node Vluae',
+        'bar_text_font_size': 8,
+        # graph padding: value range: [0, 1]
+        'left_space': 0.01,
+        'right_space': 0.909,
+        'top_space': 0.08,
+        'bottom_space': 0.09,
+        'hbetween_space': 0.05,
+        'wbetween_space': 0.05,
+        'subplot_size':0.9,
+        'bar_sie':0.05,
+        'curlyBrace_size':0.12,
+        # plot config
+        'plot_dpi': 200,
+        'plot_save_path_eps': '',
+        'plot_save_path_png': '',
+        'plot_save_path_pdf': ''
+    }
+    text = []
+    for i in range(len(g_embs)):
+        text.append('Layer {}'.format(i+1))
+    info_dict['each_graph_title_list'] = text
+    info_dict['each_graph_text_list'] = ['Original\nGraphs', 'Nodes Map']
+    plt_cnt = 0
+    for g1_id in range(len(testing_graphs)):
+        g1 = testing_graphs[g1_id]
+        middle_idx = len(trainval_graphs) // 2
+        if len(trainval_graphs) < 5:
+            print('Too few train gs {}'.format(len(trainval_graphs)))
+            return        
+        # Choose the top 6 matches, the overall middle match, and the worst match.
+        selected_ids = [0, 1, 2, 3, 10, 20, 30, 40 ,50]  
+        # Get the selected graphs from the groundtruth and the model.
+        sort_id_mat_normed = np.argsort(gt_nGED, kind = 'mergesort')
+        gids_groundtruth = np.array(sort_id_mat_normed[g1_id][selected_ids])
+
+        for i, g2_id in enumerate(gids_groundtruth):
+            g2 = trainval_graphs[g2_id]
+            node1_maplist = []
+            node2_maplist = []
+            # g1_node_emb = []
+            # g2_node_emb = []  
+
+            for layer_i in range(len(g_embs)):
+                g1_graph_emb = g_embs[layer_i]['g1'][g1_id]
+                g2_graph_emb = g_embs[layer_i]['g2'][g2_id]
+                g1_node_emb = n_embs[layer_i]['g1'][g1_id]
+                g2_node_emb = n_embs[layer_i]['g2'][g2_id]
+                if len(g1_node_emb) != g1.num_nodes or len(g2_node_emb) != g2.num_nodes:
+                    raise NotImplementedError()
+                node1_maplist.append(_get_sim_score_for_embsandemb(g1_node_emb, g2_graph_emb))
+                node2_maplist.append(_get_sim_score_for_embsandemb(g2_node_emb, g1_graph_emb))
+
+            rank_text = 'rank{}'.format(selected_ids[i]+1)
+            fn = '{}_{}_{}_{}_{}'.format(plot_what, info_dict['get_map_mothed'], 
+                                     int(testing_graphs[g1_id]['i']),
+                                     rank_text, 
+                                     int(trainval_graphs[g2_id]['i']))
+            info_dict, plt_cnt = set_save_paths_for_vis(info_dict, extra_dir, fn, plt_cnt)
+
+            vis_graph_pair(g1, g2, info_dict, types, node1_maplist, node2_maplist)
+            if plt_cnt > plot_max_num:
+                print('Saved {} query demo plots'.format(plt_cnt))
+                return 
+    pass
+
+
 if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument('--dataset',           type = str,              default = 'IMDBMulti') 
@@ -1354,17 +1493,21 @@ if __name__ == "__main__":
     model                       . eval()
 
     # draw_emb_hist_heat(args, dataset.testing_graphs, dataset.trainval_graphs, model)
-    scores,                        \
-    ground_truth,                  \
-    ground_truth_ged,              \
-    ground_truth_nged,             \
-    prediction_mat,                \
-    graph_embs_dicts,              \
-    node_embs_dicts,               \
-    graph_cdistri_dicts            = evaluate(dataset.testing_graphs, dataset.trainval_graphs, model, dataset, config, True)
+    scores,                     \
+    ground_truth,               \
+    ground_truth_ged,           \
+    ground_truth_nged,          \
+    prediction_mat,             \
+    graph_embs,                 \
+    node_embs,                  = evaluate(dataset.testing_graphs, dataset.trainval_graphs, model, dataset, config, True)
     # plot_cp_embeddings(ground_truth_ged, graph_embs_dicts, dataset)
     # compri_sim(ground_truth_ged, graph_embs_dicts)
     # compri_dist_l2(ground_truth_ged, graph_embs_dicts, dataset)
     # nodecp_sim_matrix_hist_heat(prediction_mat, graph_embs_dicts, node_embs_dicts)
-    draw_ranking(args, dataset.testing_graphs, dataset.trainval_graphs, ground_truth, ground_truth_ged, ground_truth_nged, prediction_mat, None, model_path='', plot_node_ids=args.dataset=='AIDS700nef')
+    # draw_ranking(args, dataset.testing_graphs, dataset.trainval_graphs, 
+    #             ground_truth, ground_truth_ged, ground_truth_nged,
+    #             prediction_mat, None, model_path='', plot_node_ids=args.dataset=='AIDS700nef')
+    draw_gncm_map(args, dataset.testing_graphs, dataset.trainval_graphs, 
+                ground_truth_nged, graph_embs, node_embs, 
+                None, model_path='', plot_node_ids=args.dataset=='AIDS700nef')
     # cpembedding_singular(graph_embs_dicts)
