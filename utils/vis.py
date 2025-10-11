@@ -97,9 +97,7 @@ def vis_graph_pair(g1, g2, info_dict, types, node1_maplist=None, node2_maplist=N
             fontsize=info_dict['each_graph_text_font_size'], 
             ha='center', transform=brace_ax.transAxes)    
     _save_figs(info_dict)
-    pass
-        
-
+    pass      
 
 def vis_small(q=None, gs=None, info_dict=None, types = None):
     fig = plt.figure(figsize=(9, 3))
@@ -262,14 +260,14 @@ def add_colorbar_to_fig(fig, gs, cmap, label_default, tick_label_size):
     return fig
 
 def _get_node_map_colors(g, info_dict, map):
-    if info_dict['get_map_mothed'] == 'cosine':
-        norm = True
-    elif info_dict['get_map_mothed'] == 'dot':
-        norm = False
-    if not norm:
-        max = np.max(map)
-        min = np.min(map)
-        map = [(i - min) / (max - min + 1e-10) for i in map]
+    # if info_dict['get_map_mothed'] == 'cosine':
+    #     norm = False
+    # elif info_dict['get_map_mothed'] == 'dot' or 'l2':
+    #     norm = False
+    # if not norm:
+    #     max = np.max(map)
+    #     min = np.min(map)
+    #     map = [(i - min) / (max - min + 1e-10) for i in map]
     
     node_colors = [info_dict['draw_node_color_mapdcit'](val) for val in map]
     return node_colors

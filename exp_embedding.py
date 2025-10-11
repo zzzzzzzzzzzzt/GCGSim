@@ -1205,11 +1205,12 @@ def get_norm_str(norm):
         return '_nonorm'
 
 def set_save_paths_for_vis(info_dict, extra_dir, fn, plt_cnt):
-    info_dict['plot_save_path_pdf'] = '{}/{}.{}'.format(extra_dir, fn, 'pdf')
+    info_dict['plot_save_path_pdf'] = '{}/{}.{}'.format(extra_dir, fn, 'png')
     plt_cnt += 1
     return info_dict, plt_cnt
 
-def draw_ranking(args, testing_graphs, trainval_graphs, gt, gt_GED, gt_nGED, pred_mat, existing_mappings = None, plot_gids=False, verbose=True, plot_max_num=np.inf, model_path = None, color = True, plot_node_ids = True):
+def draw_ranking(args, testing_graphs, trainval_graphs,
+                 gt, gt_GED, gt_nGED, pred_mat, existing_mappings = None, plot_gids=False, verbose=True, plot_max_num=np.inf, model_path = None, color = True, plot_node_ids = True):
     plot_what = 'ranking'
     concise = True
     c = None
@@ -1358,12 +1359,38 @@ def _get_sim_score_for_embsandemb(embs, emb, method='cosine'):
         norm_emb = np.linalg.norm(emb, axis=1, keepdims=True)  # (k,1)
         cosine_similarity = dot_product / (norm_embs * norm_emb.T + 1e-10)
         return cosine_similarity
+    elif method == 'l2':
+        return -np.linalg.norm(embs-emb, axis=1, keepdims=True)
+     
+def row_averages_keep_shape(matrix):
+    row_means = np.mean(matrix, axis=1, keepdims=True)
+    
+    result = np.broadcast_to(row_means, matrix.shape)
+    
+    return result
+    
+def _norm_map(list1, list2=None):
+    if list2 == None:
+        for i in range(len(list1)):
+            x = list1[i]
+            x_nor = (x - x.min(axis=0))/(x.max(axis=0)-x.min(axis=0)+1e-10)
+            list1[i] = x_nor
+        return list1
+    else:
+        for i in range(len(list1)): 
+            x = np.concatenate([list1[i], list2[i]])
+            x_nor = (x - x.min(axis=0))/(x.max(axis=0)-x.min(axis=0)+1e-10)
+            x_nor = x_nor.reshape(-1, 2)
+            list1[i], list2[i] = x_nor[:,0], x_nor[:,1]
+        return list1, list2
 
-def draw_gncm_map(args, testing_graphs, trainval_graphs, 
-                gt_nGED, g_embs, n_embs, 
-                existing_mappings = None, plot_gids=False, verbose=True, plot_max_num=np.inf, model_path = None, color = True, plot_node_ids = True):
-    plot_what = 'gncmmap'
-    extra_dir = osp.join(args.extra_dir, args.dataset, plot_what)
+def draw_mapping(args, testing_graphs, trainval_graphs, 
+                gt_nGED, g_embs, n_embs, map_type,
+                plot_max_num=np.inf, color = True, plot_node_ids = True):
+    if map_type == 'gncm':
+        plot_what = 'gncmmap'
+    elif map_type == 'psgd':
+        plot_what = 'psgdmap'
 
     types = trainval_graphs.types if args.dataset == 'AIDS700nef' else None
     if args.dataset == 'AIDS700nef':
@@ -1387,7 +1414,8 @@ def draw_gncm_map(args, testing_graphs, trainval_graphs,
         'draw_node_label_font_size': 6,
         'draw_node_color_map': color_map ,
         'draw_node_color_mapdcit': node_mapdcit,
-        'get_map_mothed': 'cosine',
+        'get_map_mothed': 'l2',
+        'map_norm': True,
         # draw edge config
         'draw_edge_label_enable': False,
         'draw_edge_label_font_size': 6,
@@ -1415,54 +1443,91 @@ def draw_gncm_map(args, testing_graphs, trainval_graphs,
         'plot_save_path_png': '',
         'plot_save_path_pdf': ''
     }
+    mothed = info_dict['get_map_mothed']
+    extra_dir = osp.join(args.extra_dir, args.dataset, plot_what, mothed)
     text = []
     for i in range(len(g_embs)):
         text.append('Layer {}'.format(i+1))
     info_dict['each_graph_title_list'] = text
     info_dict['each_graph_text_list'] = ['Original\nGraphs', 'Nodes Map']
     plt_cnt = 0
+    selected_ids = [0, 100, 200, 400, 400, 500]
+    
     for g1_id in range(len(testing_graphs)):
         g1 = testing_graphs[g1_id]
         middle_idx = len(trainval_graphs) // 2
         if len(trainval_graphs) < 5:
             print('Too few train gs {}'.format(len(trainval_graphs)))
             return        
-        # Choose the top 6 matches, the overall middle match, and the worst match.
-        selected_ids = [0, 1, 2, 3, 10, 20, 30, 40 ,50]  
-        # Get the selected graphs from the groundtruth and the model.
         sort_id_mat_normed = np.argsort(gt_nGED, kind = 'mergesort')
         gids_groundtruth = np.array(sort_id_mat_normed[g1_id][selected_ids])
 
         for i, g2_id in enumerate(gids_groundtruth):
             g2 = trainval_graphs[g2_id]
-            node1_maplist = []
-            node2_maplist = []
-            # g1_node_emb = []
-            # g2_node_emb = []  
-
-            for layer_i in range(len(g_embs)):
-                g1_graph_emb = g_embs[layer_i]['g1'][g1_id]
-                g2_graph_emb = g_embs[layer_i]['g2'][g2_id]
-                g1_node_emb = n_embs[layer_i]['g1'][g1_id]
-                g2_node_emb = n_embs[layer_i]['g2'][g2_id]
-                if len(g1_node_emb) != g1.num_nodes or len(g2_node_emb) != g2.num_nodes:
-                    raise NotImplementedError()
-                node1_maplist.append(_get_sim_score_for_embsandemb(g1_node_emb, g2_graph_emb))
-                node2_maplist.append(_get_sim_score_for_embsandemb(g2_node_emb, g1_graph_emb))
 
             rank_text = 'rank{}'.format(selected_ids[i]+1)
-            fn = '{}_{}_{}_{}_{}'.format(plot_what, info_dict['get_map_mothed'], 
-                                     int(testing_graphs[g1_id]['i']),
-                                     rank_text, 
-                                     int(trainval_graphs[g2_id]['i']))
+            fn = '{}_{}_{}_{}_{}'.format(plot_what, info_dict['get_map_mothed'],
+                                        'norm' if info_dict['map_norm'] else '',
+                                        int(testing_graphs[g1_id]['i']),
+                                        rank_text, 
+                                        int(trainval_graphs[g2_id]['i']))
             info_dict, plt_cnt = set_save_paths_for_vis(info_dict, extra_dir, fn, plt_cnt)
 
-            vis_graph_pair(g1, g2, info_dict, types, node1_maplist, node2_maplist)
+            if map_type == 'gncm':
+                node1_maplist = []
+                node2_maplist = []
+                for layer_i in range(len(g_embs)):
+                    g1_graph_emb = g_embs[layer_i]['g1'][g1_id]
+                    g2_graph_emb = g_embs[layer_i]['g2'][g2_id]
+                    g1_node_emb = n_embs[layer_i]['g1'][g1_id]
+                    g2_node_emb = n_embs[layer_i]['g2'][g2_id]
+                    if len(g1_node_emb) != g1.num_nodes or len(g2_node_emb) != g2.num_nodes:
+                        raise NotImplementedError()
+                    node1_maplist.append(_get_sim_score_for_embsandemb(g1_node_emb, g2_graph_emb, mothed))
+                    node2_maplist.append(_get_sim_score_for_embsandemb(g2_node_emb, g1_graph_emb, mothed))
+                vis_graph_pair(g1, g2, info_dict, types, node1_maplist, node2_maplist)
+
+            elif map_type == 'psgd':
+                node1_c2_maplist = []
+                node1_p2_maplist = []
+                node2_c1_maplist = []
+                node2_p1_maplist = []
+
+                for layer_i in range(len(g_embs)):
+                    c1_emb = g_embs[layer_i]['com_1'][g1_id][g2_id]
+                    p1_emb = g_embs[layer_i]['pri_1'][g1_id][g2_id]
+                    c2_emb = g_embs[layer_i]['com_2'][g1_id][g2_id]
+                    p2_emb = g_embs[layer_i]['pri_2'][g1_id][g2_id]
+                    g1_node_emb = n_embs[layer_i]['g1'][g1_id]
+                    g2_node_emb = n_embs[layer_i]['g2'][g2_id]
+                    # g1_node_emb = row_averages_keep_shape(g1_node_emb)
+                    # g2_node_emb = row_averages_keep_shape(g2_node_emb)
+                    if len(g1_node_emb) != g1.num_nodes or len(g2_node_emb) != g2.num_nodes:
+                        raise NotImplementedError()
+                    node1_c2_maplist.append(_get_sim_score_for_embsandemb(g1_node_emb, c2_emb, mothed))
+                    node1_p2_maplist.append(_get_sim_score_for_embsandemb(g1_node_emb, p2_emb, mothed))
+                    node2_c1_maplist.append(_get_sim_score_for_embsandemb(g2_node_emb, c1_emb, mothed))
+                    node2_p1_maplist.append(_get_sim_score_for_embsandemb(g2_node_emb, p1_emb, mothed))
+
+
+                # node1_c2_maplist = [np.mean(np.array(node1_c2_maplist), axis=0) for _ in node1_c2_maplist]
+                # node1_p2_maplist = [np.mean(np.array(node1_p2_maplist), axis=0) for _ in node1_p2_maplist]
+                # node2_c1_maplist = [np.mean(np.array(node2_c1_maplist), axis=0) for _ in node2_c1_maplist]
+                # node2_p1_maplist = [np.mean(np.array(node2_p1_maplist), axis=0) for _ in node2_p1_maplist]
+
+                if info_dict['map_norm']:
+                    node1_c2_maplist = _norm_map(node1_c2_maplist)
+                    node1_p2_maplist = _norm_map(node1_p2_maplist)
+                    node2_c1_maplist = _norm_map(node2_c1_maplist)
+                    node2_p1_maplist = _norm_map(node2_p1_maplist)
+                vis_graph_pair(g1, g2, info_dict, types, 
+                               node1_c2_maplist+node1_p2_maplist,
+                               node2_c1_maplist+node2_p1_maplist)               
+
             if plt_cnt > plot_max_num:
                 print('Saved {} query demo plots'.format(plt_cnt))
                 return 
     pass
-
 
 if __name__ == "__main__":
     parser = ArgumentParser()
@@ -1507,7 +1572,7 @@ if __name__ == "__main__":
     # draw_ranking(args, dataset.testing_graphs, dataset.trainval_graphs, 
     #             ground_truth, ground_truth_ged, ground_truth_nged,
     #             prediction_mat, None, model_path='', plot_node_ids=args.dataset=='AIDS700nef')
-    draw_gncm_map(args, dataset.testing_graphs, dataset.trainval_graphs, 
-                ground_truth_nged, graph_embs, node_embs, 
-                None, model_path='', plot_node_ids=args.dataset=='AIDS700nef')
+    draw_mapping(args, dataset.testing_graphs, dataset.trainval_graphs, 
+                ground_truth_nged, graph_embs, node_embs, 'psgd',
+                plot_node_ids=args.dataset=='AIDS700nef')
     # cpembedding_singular(graph_embs_dicts)
