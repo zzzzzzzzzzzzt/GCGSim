@@ -1,4 +1,4 @@
-dataset: "AIDS700nef"
+dataset: "PTC"
 
 model_name: "CPRGsim"
 
@@ -58,11 +58,11 @@ CPRGsim:
   swap_rate: 0.0
   crep_rate: 0.02
   prep_rate: 0.0
-  ppre_rate: 0.0001
+  ppre_rate: 0.001
   use_ff: False
   measure: 'JSD'
   model_name: 'GSC_GNN'
-  dataset_name: 'AIDS700nef'
+  dataset_name: 'PTC'
   sep: False
   board_log: False
   reconstruction: False

@@ -47,3 +47,22 @@ class MLPLayers(nn.Module):
     def forward(self,x):
         x = self.mlp_list(x)
         return x
+
+
+class Net(nn.Module):
+    def __init__(self, dim):
+        super(Net, self).__init__()
+        self.fc1 = MLPLayers(2*dim, dim, 1, num_layers=4, use_bn=False)
+        self.init_parameters()
+
+    def forward(self,x,y):
+        h1 = torch.cat([x, y], dim=1)
+        h2 = self.fc1(h1)
+        return h2
+    
+    def init_parameters(self):
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                nn.init.xavier_normal_(m.weight)
+                if m.bias is not None:
+                    nn.init.constant_(m.bias, 0)

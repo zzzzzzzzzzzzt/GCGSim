@@ -4,6 +4,7 @@ import numpy as np
 # from rich import print
 from model.GSC import GSC
 from model.CPRGsim import CPRGsim
+from model.MLP import Net
 from argparse import ArgumentParser
 from utils.utils import *
 from utils.vis import vis_small, vis_graph_pair
@@ -1425,7 +1426,7 @@ def draw_mapping(args, testing_graphs, trainval_graphs,
         'each_graph_text_font_size': 10,
         'each_graph_title_pos': [0.5, 1.05],
         'each_graph_text_pos': [0.5, -1.36],
-        'bar_text': 'Node Vluae',
+        'bar_text': 'Similarity Value',
         'bar_text_font_size': 8,
         # graph padding: value range: [0, 1]
         'left_space': 0.01,
@@ -1449,7 +1450,7 @@ def draw_mapping(args, testing_graphs, trainval_graphs,
     for i in range(len(g_embs)):
         text.append('Layer {}'.format(i+1))
     info_dict['each_graph_title_list'] = text
-    info_dict['each_graph_text_list'] = ['Original\nGraphs', 'Nodes Map']
+    info_dict['each_graph_text_list'] = ['Original\nGraphs', 'Similarity Heatmap']
     plt_cnt = 0
     selected_ids = [0, 100, 200, 400, 400, 500]
     
@@ -1529,6 +1530,58 @@ def draw_mapping(args, testing_graphs, trainval_graphs,
                 return 
     pass
 
+def MINE(args, config, graph_embs):
+    ws = 50
+    last_n = 400
+    _, mode_dir = osp.split(args.pretrain_path)
+
+    def gen_x_tensor(x):
+        return torch.Tensor(x)
+    def gen_y_tensor(y):
+        return torch.Tensor(y)
+    def moving_average(losses, window_size=5):
+        return np.convolve(losses, np.ones(window_size)/window_size, mode='valid')
+    model = torch.nn.ModuleList()
+    for i in config['gnn_filters']:
+        model.append(Net(dim=i))# 实例化模型
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.005) # 使用Adam优化器并设置学习率为0.01
+    
+    n_epoch = 1500
+    for layer_i in range(len(graph_embs)):
+        mine_list = []
+        exp_figure_name = 'MINE_layer_{}'.format(layer_i)
+        for g1_id in range(len(graph_embs[layer_i]['com_1'])): # 遍历所有图对
+            plot_loss = []
+            model[layer_i].init_parameters()
+            for _ in range(n_epoch):
+                x_sample = gen_x_tensor(graph_embs[layer_i]['com_1'][g1_id])
+                y_sample = gen_y_tensor(graph_embs[layer_i]['pri_1'][g1_id])
+                y_shuffle = y_sample[torch.randperm(y_sample.size(0))]#将 y_sample按照批次维度打乱顺序得到y_shuffle
+        
+                model[layer_i].zero_grad()
+                pred_xy = model[layer_i](x_sample, y_sample)  # 式(8-49）中的第一项联合分布的期望:将x_sample和y_sample放到模型中，得到联合概率（P(X,Y)=P(Y|X)P(X)）关于神经网络的期望值pred_xy。
+                pred_x_y = model[layer_i](x_sample, y_shuffle)  # 式(8-49)中的第二项边缘分布的期望:将x_sample和y_shuffle放到模型中，得到边缘概率关于神经网络的期望值pred_x_y 。
+        
+                ret = torch.mean(pred_xy) - torch.log(torch.mean(torch.exp(pred_x_y))) # 将pred_xy和pred_x_y代入式（8-49）中，得到互信息ret。
+                loss = - ret  # 最大化互信息：在训练过程中，因为需要将模型权重向着互信息最大的方向优化，所以对互信息取反，得到最终的loss值。
+                plot_loss.append(loss.data)  # 收集损失值
+                loss.backward()  # 反向传播：在得到loss值之后，便可以进行反向传播并调用优化器进行模型优化。
+                optimizer.step()  # 调用优化器            
+            plot_y = np.array(plot_loss).reshape(-1, )
+            plot_y_average = moving_average(-plot_y, window_size=ws)
+            mine_list.append(np.mean(plot_y_average[-last_n:]))
+            plt.plot(np.arange(len(plot_loss)), -plot_y, 'r')
+            plt.plot(np.arange(len(plot_loss)-ws+1), plot_y_average, 'b')
+            save_fig(plt, osp.join('img', mode_dir, exp_figure_name), '{}'.format(g1_id))
+            plt.close()
+        mine_arr = np.array(mine_list)
+        mine_arr[mine_arr < 0] = 0
+        with open(osp.join(osp.join('img', mode_dir), 'MINE.txt'), 'a') as f:
+            f.write("Layer_{} {:.2f}±{:.2f}\n".format(layer_i, mine_arr.mean(), mine_arr.std()))
+    # plt.plot(np.arange(len(mine_list)), np.array(mine_list), 'b')
+    # plt.savefig('MINE.PNG')
+
+
 if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument('--dataset',           type = str,              default = 'IMDBMulti') 
@@ -1565,6 +1618,7 @@ if __name__ == "__main__":
     prediction_mat,             \
     graph_embs,                 \
     node_embs,                  = evaluate(dataset.testing_graphs, dataset.trainval_graphs, model, dataset, config, True)
+    MINE(args, config, graph_embs)
     # plot_cp_embeddings(ground_truth_ged, graph_embs_dicts, dataset)
     # compri_sim(ground_truth_ged, graph_embs_dicts)
     # compri_dist_l2(ground_truth_ged, graph_embs_dicts, dataset)
@@ -1572,7 +1626,7 @@ if __name__ == "__main__":
     # draw_ranking(args, dataset.testing_graphs, dataset.trainval_graphs, 
     #             ground_truth, ground_truth_ged, ground_truth_nged,
     #             prediction_mat, None, model_path='', plot_node_ids=args.dataset=='AIDS700nef')
-    draw_mapping(args, dataset.testing_graphs, dataset.trainval_graphs, 
-                ground_truth_nged, graph_embs, node_embs, 'psgd',
-                plot_node_ids=args.dataset=='AIDS700nef')
+    # draw_mapping(args, dataset.testing_graphs, dataset.trainval_graphs, 
+    #             ground_truth_nged, graph_embs, node_embs, 'psgd',
+    #             plot_node_ids=args.dataset=='AIDS700nef')
     # cpembedding_singular(graph_embs_dicts)

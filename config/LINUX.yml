@@ -21,13 +21,13 @@ CPRGsim:
   optimizer: "Adam"
   num_layers: 2
   activation: "relu"
-  multirun: 3
+  multirun: 2
   feat_norm: False
   synth: False
   scale: 1
   show_last: False
 
-  gnn_encoder: "GIN"
+  gnn_encoder: "RGGC"
   graph_encoder: 'deepset'      
   multi_contrast: False
   gnn_filters: [64, 64, 32, 16]

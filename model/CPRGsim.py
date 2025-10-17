@@ -95,6 +95,7 @@ class CPRGsim(nn.Module):
         end1 = start-rep_num if start else -rep_num
         # end2 = end1-rep_num
         for i in range(self.num_filter):
+            feature_1[i] = feature_1[i].clone()
             feature_1[i][end1:start] = feature_2[i][end1:start].clone()
             # feature_2[i][end2:end1] = feature_1[i][end2:end1].clone()
         

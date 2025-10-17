@@ -43,9 +43,8 @@ class DatasetLocal(dataset):
         if self.dataset_name in ['Cora']:
             dataset = Planetoid(root=self.dataset_source_folder_path, name = self.dataset_name, transform=self.feat_transform)
         
-        if self.dataset_name in ['AIDS700nef', 'LINUX', 'IMDBMulti','ALKANE']:
-            self.trainval_graphs = GEDDataset(   # 560
-                self.dataset_source_folder_path + "/{}".format(self.dataset_name),
+        if self.dataset_name in ['AIDS700nef', 'LINUX', 'IMDBMulti','ALKANE', 'PTC']:
+            self.trainval_graphs = MyGEDDataset(
                 self.dataset_name,
                 train=True)
             if config['use_val']:
@@ -53,14 +52,12 @@ class DatasetLocal(dataset):
                 num_trainval_gs = len(self.trainval_graphs)
                 self.val_graphs = self.trainval_graphs[-int(num_trainval_gs*val_ratio):]   # 140
                 self.training_graphs = self.trainval_graphs[0: -int(num_trainval_gs*val_ratio)]   # 420
-        self.testing_graphs = GEDDataset(
-            self.dataset_source_folder_path + "/{}".format(self.dataset_name),
+        self.testing_graphs = MyGEDDataset(
             self.dataset_name,
             train=False)
         
         if self.dataset_name == 'ALKANE':
-            self.testing_graphs = GEDDataset(
-                self.dataset_source_folder_path + "/{}".format(self.dataset_name),
+            self.testing_graphs = MyGEDDataset(
                 self.dataset_name,
                 train=True) 
         self.trainval_nged_matrix    = self.trainval_graphs.norm_ged
