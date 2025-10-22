@@ -33,7 +33,8 @@ class CPRGsim(nn.Module):
 
         if self.config['sim_rat']:
             com_1, com_2, pri_1, pri_2 = self.feature_distri(com_1, com_2, pri_1, pri_2, pool_1, pool_2)
-
+            self.com_1, self.com_2, self.pri_1, self.pri_2 = com_1, com_2, pri_1, pri_2
+            
         if self.config.get('use_mutualloss', False):
             minfo = self.statnet(com_1, com_2, pool_1, pool_2)
 
@@ -239,17 +240,17 @@ class Discriminator(nn.Module):
                                             )
         else:
             ntn_score = []
-            _ntn_score_onlyc = []
-            _ntn_score_onlyp = []
+            self._ntn_score_onlyc = []
+            self._ntn_score_onlyp = []
             for i in range(self.config['NTN_layers']):
                 c_ntn_score = self.c_NTN_list[i](common_feature_1[i], common_feature_2[i])
                 p_ntn_score = self.p_NTN_list[i](private_feature_1[i], private_feature_2[i])
 
-                _ntn_score_onlyc.append(c_ntn_score)
-                _ntn_score_onlyp.append(p_ntn_score)
+                self._ntn_score_onlyc.append(c_ntn_score)
+                self._ntn_score_onlyp.append(p_ntn_score)
 
-            self.ntn_score_onlyc = torch.cat(_ntn_score_onlyc, dim=-1)   
-            self.ntn_score_onlyp = torch.cat(_ntn_score_onlyp, dim=-1)
+            self.ntn_score_onlyc = torch.cat(self._ntn_score_onlyc, dim=-1)   
+            self.ntn_score_onlyp = torch.cat(self._ntn_score_onlyp, dim=-1)
             ntn_score = torch.cat([self.ntn_score_onlyc, self.ntn_score_onlyp], dim=-1)
         return torch.sigmoid(self.score_sim_layer(ntn_score).squeeze())
     

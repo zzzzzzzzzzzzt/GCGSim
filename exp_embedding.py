@@ -16,6 +16,7 @@ from tqdm import tqdm
 from numpy.linalg import norm
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.manifold import TSNE
+from sklearn.preprocessing import MinMaxScaler
 import torch.nn.functional as F
 from utils.color import *
 # matplotlib.use('Agg')
@@ -30,6 +31,9 @@ import os.path as osp
 TRUE_MODEL = 'astar'
 from scipy.stats import spearmanr, kendalltau
 from matplotlib.colors import LinearSegmentedColormap
+from matplotlib.patches import Circle
+from sklearn.cluster import DBSCAN
+from scipy.spatial.distance import pdist, squareform
 
 @torch.no_grad()
 def evaluate(testing_graphs, training_graphs, model, dataset: DatasetLocal, config, emb_log=True):
@@ -44,7 +48,7 @@ def evaluate(testing_graphs, training_graphs, model, dataset: DatasetLocal, conf
     node_embs                      = dict()
     for i_filter in range(model.num_filter):
         graph_embs[i_filter] = dict()
-        for n in ['com_1', 'com_2', 'pri_1', 'pri_2', 'g1', 'g2']:
+        for n in ['com_1', 'com_2', 'pri_1', 'pri_2', 'g1', 'g2', 'i_as', 'i_us']:
             graph_embs[i_filter][n] = list()
         node_embs[i_filter]  = dict()
         for n in ['g1', 'g2']:
@@ -103,10 +107,12 @@ def evaluate(testing_graphs, training_graphs, model, dataset: DatasetLocal, conf
 
         if emb_log:
             for i_filter in range(model.num_filter):
-                graph_embs[i_filter]['com_1'].append(model.cp_generator.com1_list[i_filter].cpu().detach().numpy())
-                graph_embs[i_filter]['com_2'].append(model.cp_generator.com2_list[i_filter].cpu().detach().numpy())             
-                graph_embs[i_filter]['pri_1'].append(model.cp_generator.pri1_list[i_filter].cpu().detach().numpy())                  
-                graph_embs[i_filter]['pri_2'].append(model.cp_generator.pri2_list[i_filter].cpu().detach().numpy())
+                graph_embs[i_filter]['com_1'].append(model.com_1[i_filter].cpu().detach().numpy())
+                graph_embs[i_filter]['com_2'].append(model.com_2[i_filter].cpu().detach().numpy())             
+                graph_embs[i_filter]['pri_1'].append(model.pri_1[i_filter].cpu().detach().numpy())                  
+                graph_embs[i_filter]['pri_2'].append(model.pri_2[i_filter].cpu().detach().numpy())
+                graph_embs[i_filter]['i_as'].append(model.discriminator._ntn_score_onlyc[i_filter].cpu().detach().numpy())
+                graph_embs[i_filter]['i_us'].append(model.discriminator._ntn_score_onlyp[i_filter].cpu().detach().numpy())
                 graph_embs[i_filter]['g1'].append(model.cp_generator.g1_list[i_filter][0].cpu().detach().numpy())
                 node_embs[i_filter]['g1'].append(model.cp_generator.nod1_list[i_filter][0][0].cpu().detach().numpy())
         t.update(len(training_graphs))
@@ -839,48 +845,248 @@ def visualize_embeddings_gradual(args, testing_graphs, trainval_graphs, model: G
         plot_embeddings_for_each_query(embs, ids, plt_cnt, ground_truth_nged, sort_id_mat_normed,extra_dir,
                                     plot_max_num, gnn_id ,trainval_graphs, testing_graphs,concise, sort, perplexity)
 
-def plot_cp_embeddings(ground_truth_nged, graph_embs_dicts, dataset):
+def plot_cp_embeddings(ground_truth, graph_embs_dicts, dataset):
     len_trival                     = len(dataset.trainval_graphs)
-    sort_id_mat                    = np.argsort(ground_truth_nged,  kind = 'mergesort')
-    test_gidlist                   = [10, 20, 30, 40, 50, 60]
+    len_test                       = len(dataset.testing_graphs)
+    sort_id_mat                    = np.argsort(-ground_truth,  kind = 'mergesort')             
     filter_list                    = [0,1,2,3]
-    tsne = TSNE(n_components=2, perplexity=10)
+    tsne = TSNE(n_components=2, perplexity=30, metric='cosine', learning_rate = 400)
     extra_dir = osp.join('img', osp.split(args.pretrain_path)[1], 'plot_cp_emb')
-
-    for qid in test_gidlist:
-        for sort, pid in enumerate(sort_id_mat[qid]):
-            for gnn_id in filter_list:
-                _plot_cp_embeddings(qid, sort, pid, graph_embs_dicts, gnn_id, tsne, extra_dir)
-
-def _plot_cp_embeddings(qid, sort, pid, embs, gnn_id, tsne, extra_dir):
-    emb = np.array([embs[gnn_id]['com_1'][qid][pid],
-                    embs[gnn_id]['pri_1'][qid][pid],
-                    embs[gnn_id]['com_2'][qid][pid],
-                    embs[gnn_id]['pri_2'][qid][pid]])
-    emb = tsne.fit_transform(emb)
-    plt.figure()
-    plt.scatter(emb[0][0], emb[0][1], s=20,
-                color = 'blue',
-                marker='s')
-    plt.scatter(emb[1][0], emb[1][1], s=20,
-                c='red',
-                marker='s')
-    plt.scatter(emb[2][0], emb[2][1], s=20,
-                color = 'blue',
-                marker='s')
-    plt.scatter(emb[3][0], emb[3][1], s=20,
-                c='red',
-                marker='s')
-    cur_axes = plt.gca()
-    cur_axes.axes.get_xaxis().set_visible(False)
-    cur_axes.axes.get_yaxis().set_visible(False)
-
-    exp_figure_name = '{}_{}_sort{}_gcn{}'.format(qid, pid, sort, gnn_id)
-
-    save_fig(plt, extra_dir, exp_figure_name)
-
-    plt.close()
+    slice_percent = 0.1  # 定义我们要取的切片占总数的百分比 (5%)
+    slice_size = int(len_trival * slice_percent)
+    middle_slice_start_index = int(len_trival * 0.5)
     
+
+    for qid in range(len_test):
+        for gnn_id in filter_list:
+            # cg, mg, fg = [], [], []
+            sorted_pids = sort_id_mat[qid]
+
+            cg = list(sorted_pids[:slice_size])
+            mg = list(sorted_pids[middle_slice_start_index : middle_slice_start_index + slice_size])
+            fg = list(sorted_pids[-slice_size:])
+
+            _plot_cp_embeddings(qid, cg, mg, fg, graph_embs_dicts, gnn_id, tsne, extra_dir, sort_id_mat, ground_truth)
+
+# def _plot_cp_embeddings(qid, cg, mg, fg, embs, gnn_id, tsne, extra_dir, sort_id_mat, s_size=10):
+#     emb = np.array([embs[gnn_id]['com_1'][qid],
+#                     embs[gnn_id]['pri_1'][qid],
+#                     embs[gnn_id]['com_2'][qid],
+#                     embs[gnn_id]['pri_2'][qid]])
+#     emb = tsne.fit_transform(emb.reshape(-1, emb.shape[-1]))
+#     emb = emb.reshape(4, -1, emb.shape[-1])
+#     c1, p1, c2, p2 = emb[0][sort_id_mat[qid]], emb[1][sort_id_mat[qid]], emb[2][sort_id_mat[qid]], emb[3][sort_id_mat[qid]]
+#     plt.figure()
+#     plt.scatter(c1[:,0], c1[:,1], s=s_size,
+#                 c=sorted(range(len(c1)), reverse=False),
+#                 marker='s', cmap=plt.cm.get_cmap('Blues'))
+#     plt.scatter(c2[:,0], c2[:,1], s=s_size,
+#                 c=sorted(range(len(c2)), reverse=False),
+#                 marker='o', cmap=plt.cm.get_cmap('Reds'))
+#     plt.scatter(p1[:,0], c1[:,1], s=s_size,
+#                 c=sorted(range(len(p1)), reverse=False),
+#                 marker='s', cmap=plt.cm.get_cmap('Greens'))
+#     plt.scatter(p1[:,0], p2[:,1], s=s_size,
+#                 c=sorted(range(len(p2)), reverse=False),
+#                 marker='o', cmap=plt.cm.get_cmap('Oranges'))
+#     # plt.scatter(p1[cg][0], p1[cg][1], s=20,
+#     #             color = 'red',
+#     #             marker='s')
+#     cur_axes = plt.gca()
+#     cur_axes.axes.get_xaxis().set_visible(False)
+#     cur_axes.axes.get_yaxis().set_visible(False)
+
+#     exp_figure_name = '{}_gcn{}'.format(qid, gnn_id)
+
+#     save_fig(plt, extra_dir, exp_figure_name)
+
+#     plt.close()
+def _plot_cp_embeddings(qid, cg, mg, fg, embs, gnn_id, tsne, extra_dir, sort_id_mat, gt, s_size=5):
+    # --------------------------
+    # 1. 提取嵌入并进行t-SNE降维
+    # --------------------------
+    def _concatenate(embs, sub, qid):
+        arrays = [embs[i][sub][qid] for i in range(2)]
+        return np.concatenate(arrays, axis=1)
+
+    emb = np.array([
+        embs[gnn_id]['com_1'][qid],
+        embs[gnn_id]['pri_1'][qid],
+        embs[gnn_id]['com_2'][qid],
+        embs[gnn_id]['pri_2'][qid]
+    ])
+    # scaler = MinMaxScaler()
+    # X_scaled = scaler.fit_transform(emb)
+    # emb = np.array([
+    #     _concatenate(embs, 'com_1', qid),
+    #     _concatenate(embs, 'pri_1', qid),
+    #     _concatenate(embs, 'com_2', qid),
+    #     _concatenate(embs, 'pri_2', qid)
+    # ])
+    # 展平后降维，再恢复原结构（4类嵌入，每类形状为[num_samples, 2]）
+    emb_flat = emb.reshape(-1, emb.shape[-1])  # 展平为[4*N, D]
+    emb_tsne = tsne.fit_transform(emb_flat)    # t-SNE降维到2D
+    emb_2d = emb_tsne.reshape(4, -1, 2)        # 恢复为[4, N, 2]
+
+    # 提取四类嵌入的t-SNE结果（按原逻辑）
+    c1, p1, c2, p2 = emb_2d[0][sort_id_mat[qid]], emb_2d[1][sort_id_mat[qid]], \
+                     emb_2d[2][sort_id_mat[qid]], emb_2d[3][sort_id_mat[qid]]
+
+    # --------------------------
+    # 2. 计算cg/mg/fg的聚类中心和半径
+    # --------------------------
+    def get_cluster_stats_robust(points):
+        if len(points) == 0:
+            return None, None
+        
+        # --- 1. 确定中心点 (Medoid) ---
+        # 计算点集中任意两点之间的欧几里得距离矩阵
+        distance_matrix = squareform(pdist(points, 'euclidean'))
+        
+        # 计算每个点到其他所有点的距离总和
+        sum_of_distances = np.sum(distance_matrix, axis=1)
+        
+        # 找到距离总和最小的点的索引，这个点就是Medoid
+        medoid_index = np.argmin(sum_of_distances)
+        center = points[medoid_index]
+        
+        # --- 2. 确定聚类半径 (Average Distance) ---
+        # 计算所有点到 Medoid 的距离
+        # 我们可以直接从距离矩阵中提取这一列/行的数据，无需重复计算
+        distances_to_medoid = distance_matrix[:, medoid_index]
+        
+        # 计算这些距离的平均值
+        radius = np.mean(distances_to_medoid)
+        
+        return center, radius
+    def get_cluster_stats_density(points, eps=4.5, min_samples=5):
+        """
+        基于DBSCAN密度聚类，仅用核心样本计算统计量
+        :param eps: DBSCAN邻域半径
+        :param min_samples: 核心点最小邻居数
+        :return: 核心样本的中心点，半径
+        """
+        if len(points) < min_samples:
+            return get_cluster_stats_robust(points)
+        
+        # 1. DBSCAN聚类（-1为噪声点）
+        dbscan = DBSCAN(eps=eps, min_samples=min_samples)
+        labels = dbscan.fit_predict(points)
+        
+        # 2. 筛选核心样本（非噪声点）
+        core_mask = labels != -1
+        core_points = points[core_mask]
+        
+        # 3. 若核心样本太少，回退到稳健方法
+        if len(core_points) < 3:
+            return None, None
+        
+        # 4. 用核心样本计算稳健统计
+        return get_cluster_stats_robust(core_points)
+    def get_cluster_stats_with_outlier_removal(points, z_threshold=1.5):
+        """
+        先剔除异常点，再计算核心样本的聚类统计
+        :param points: 聚类样本点，形状为[N, 2]
+        :param z_threshold: Z-score阈值（>阈值视为异常点）
+        :return: 核心样本的中心点，半径
+        """
+        if len(points) < 3:  # 样本太少时不剔除异常点
+            return get_cluster_stats_robust(points)  # 直接用稳健方法
+        
+        # 1. 计算每个样本到均值中心的距离（临时中心，用于初步筛选）
+        temp_center = np.mean(points, axis=0)
+        distances = np.linalg.norm(points - temp_center, axis=1)
+        
+        # 2. Z-score识别异常点（距离偏离均值太远的为异常点）
+        z_scores = (distances - np.mean(distances)) / np.std(distances)
+        core_mask = z_scores <= z_threshold  # 核心样本掩码（非异常点）
+        core_points = points[core_mask]
+        
+        # 3. 若过滤后样本太少，回退到原始样本
+        if len(core_points) < 3:
+            core_points = points
+        
+        # 4. 用核心样本计算稳健统计（中位数+分位数）
+        return get_cluster_stats_robust(core_points)        
+        # 以c1为例计算三类样本的聚类 stats（如需其他嵌入，可替换c1为p1/c2/p2）
+    c1_all = p1  # c1的所有样本点
+    # 提取cg/mg/fg在c1中的对应点（cg/mg/fg是样本索引）
+    c1_cg = c1_all[cg] if cg else np.array([])
+    c1_mg = c1_all[mg] if mg else np.array([])
+    c1_fg = np.array([])
+
+    # 计算三类的中心和半径
+    center_cg, radius_cg = get_cluster_stats_robust(c1_cg)
+    center_mg, radius_mg = get_cluster_stats_robust(c1_mg)
+    center_fg, radius_fg = get_cluster_stats_robust(c1_fg)
+
+    # --------------------------
+    # 3. 绘制散点图和聚类半径
+    # --------------------------
+    plt.figure(figsize=(8, 8))
+    ax = plt.gca()
+
+    # 绘制原始散点（保持原逻辑）
+    plt.scatter(c1[:,0], c1[:,1], s=s_size,
+                c=gt[qid][sort_id_mat[qid]],
+                marker='s', cmap=plt.cm.get_cmap('Blues'), alpha=0.6, label='Has_1')
+    plt.scatter(c2[:,0], c2[:,1], s=s_size,
+                c=gt[qid][sort_id_mat[qid]],
+                marker='o', cmap=plt.cm.get_cmap('Reds'), alpha=0.6, label='Has_2')
+    plt.scatter(p1[:,0], p1[:,1], s=s_size,  # 原代码此处笔误：c1[:,1]→p1[:,1]
+                c=gt[qid][sort_id_mat[qid]],
+                marker='s', cmap=plt.cm.get_cmap('Greens'), alpha=0.6, label='Hus_1')
+    plt.scatter(p2[:,0], p2[:,1], s=s_size,  # 原代码此处笔误：p1[:,0]→p2[:,0]
+                c=gt[qid][sort_id_mat[qid]],
+                marker='o', cmap=plt.cm.get_cmap('Oranges'), alpha=0.6, label='Hus_2')
+
+    # # 绘制cg/mg/fg的聚类半径（用不同颜色的圆圈）
+    # if center_cg is not None:
+    #     circle_cg = Circle(center_cg, radius_cg, fill=False, edgecolor='blue', 
+    #                       linestyle='-', linewidth=2, label='CG Radius')
+    #     ax.add_patch(circle_cg)
+    # if center_mg is not None:
+    #     circle_mg = Circle(center_mg, radius_mg, fill=False, edgecolor='purple', 
+    #                       linestyle='--', linewidth=2, label='MG Radius')
+    #     ax.add_patch(circle_mg)
+    # if center_fg is not None:
+    #     circle_fg = Circle(center_fg, radius_fg, fill=False, edgecolor='red', 
+    #                       linestyle='-.', linewidth=2, label='FG Radius')
+    #     ax.add_patch(circle_fg)
+    # 绘制cg/mg/fg的聚类半径（圆圈）
+    if center_cg is not None:
+        # 绘制圆圈
+        circle_cg = Circle(center_cg, radius_cg, fill=False, edgecolor='blue', 
+                          linestyle='-', linewidth=2, label='Similar Graphs')
+        ax.add_patch(circle_cg)
+
+    if center_mg is not None:
+        # 绘制圆圈
+        circle_mg = Circle(center_mg, radius_mg, fill=False, edgecolor='purple', 
+                          linestyle='--', linewidth=2, label='MG Radius')
+        ax.add_patch(circle_mg)
+
+    if center_fg is not None:
+        # 绘制圆圈
+        circle_fg = Circle(center_fg, radius_fg, fill=False, edgecolor='red', 
+                          linestyle='-.', linewidth=2, label='Dissimilar Graphs')
+        ax.add_patch(circle_fg)
+
+    # --------------------------
+    # 4. 美化与保存
+    # --------------------------
+    plt.legend(loc='best', fontsize=10)
+    ax.axes.get_xaxis().set_visible(False)  # 隐藏坐标轴
+    ax.axes.get_yaxis().set_visible(False)
+    plt.tight_layout()
+
+    # 创建保存目录并保存图片
+    os.makedirs(extra_dir, exist_ok=True)
+    save_path = osp.join(extra_dir, f'qid_{qid}_gnn_{gnn_id}_with_radius.png')
+    plt.savefig(save_path, dpi=200, bbox_inches='tight')
+    plt.close()
+    print('Saved to {}'.format(save_path))    
+
 def plot_embeddings_for_each_query(embs, ids, plt_cnt,ground_truth_nged, sort_id_mat_normed, extra_dir,
                                    plot_max_num, gnn_id, trainval_graphs, testing_graphs, concise, sort, perplexity):
     emb_dict = dict()
@@ -1618,8 +1824,8 @@ if __name__ == "__main__":
     prediction_mat,             \
     graph_embs,                 \
     node_embs,                  = evaluate(dataset.testing_graphs, dataset.trainval_graphs, model, dataset, config, True)
-    MINE(args, config, graph_embs)
-    # plot_cp_embeddings(ground_truth_ged, graph_embs_dicts, dataset)
+    # MINE(args, config, graph_embs)
+    plot_cp_embeddings(ground_truth, graph_embs, dataset)
     # compri_sim(ground_truth_ged, graph_embs_dicts)
     # compri_dist_l2(ground_truth_ged, graph_embs_dicts, dataset)
     # nodecp_sim_matrix_hist_heat(prediction_mat, graph_embs_dicts, node_embs_dicts)
