@@ -16,7 +16,7 @@ from tqdm import tqdm
 from numpy.linalg import norm
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.manifold import TSNE
-from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import MinMaxScaler, Normalizer, StandardScaler
 import torch.nn.functional as F
 from utils.color import *
 # matplotlib.use('Agg')
@@ -849,8 +849,8 @@ def plot_cp_embeddings(ground_truth, graph_embs_dicts, dataset):
     len_trival                     = len(dataset.trainval_graphs)
     len_test                       = len(dataset.testing_graphs)
     sort_id_mat                    = np.argsort(-ground_truth,  kind = 'mergesort')             
-    filter_list                    = [0,1,2,3]
-    tsne = TSNE(n_components=2, perplexity=30, metric='cosine', learning_rate = 400)
+    filter_list                    = [0,1]
+    tsne = TSNE(n_components=2, perplexity=30)
     extra_dir = osp.join('img', osp.split(args.pretrain_path)[1], 'plot_cp_emb')
     slice_percent = 0.1  # 定义我们要取的切片占总数的百分比 (5%)
     slice_size = int(len_trival * slice_percent)
@@ -858,6 +858,7 @@ def plot_cp_embeddings(ground_truth, graph_embs_dicts, dataset):
     
 
     for qid in range(len_test):
+        gid = int(dataset.testing_graphs[qid]['i'])
         for gnn_id in filter_list:
             # cg, mg, fg = [], [], []
             sorted_pids = sort_id_mat[qid]
@@ -866,7 +867,7 @@ def plot_cp_embeddings(ground_truth, graph_embs_dicts, dataset):
             mg = list(sorted_pids[middle_slice_start_index : middle_slice_start_index + slice_size])
             fg = list(sorted_pids[-slice_size:])
 
-            _plot_cp_embeddings(qid, cg, mg, fg, graph_embs_dicts, gnn_id, tsne, extra_dir, sort_id_mat, ground_truth)
+            _plot_cp_embeddings(qid, gid, cg, mg, fg, graph_embs_dicts, gnn_id, tsne, extra_dir, sort_id_mat, ground_truth)
 
 # def _plot_cp_embeddings(qid, cg, mg, fg, embs, gnn_id, tsne, extra_dir, sort_id_mat, s_size=10):
 #     emb = np.array([embs[gnn_id]['com_1'][qid],
@@ -901,7 +902,7 @@ def plot_cp_embeddings(ground_truth, graph_embs_dicts, dataset):
 #     save_fig(plt, extra_dir, exp_figure_name)
 
 #     plt.close()
-def _plot_cp_embeddings(qid, cg, mg, fg, embs, gnn_id, tsne, extra_dir, sort_id_mat, gt, s_size=5):
+def _plot_cp_embeddings(qid, gid, cg, mg, fg, embs, gnn_id, tsne, extra_dir, sort_id_mat, gt, s_size=5):
     # --------------------------
     # 1. 提取嵌入并进行t-SNE降维
     # --------------------------
@@ -915,8 +916,6 @@ def _plot_cp_embeddings(qid, cg, mg, fg, embs, gnn_id, tsne, extra_dir, sort_id_
         embs[gnn_id]['com_2'][qid],
         embs[gnn_id]['pri_2'][qid]
     ])
-    # scaler = MinMaxScaler()
-    # X_scaled = scaler.fit_transform(emb)
     # emb = np.array([
     #     _concatenate(embs, 'com_1', qid),
     #     _concatenate(embs, 'pri_1', qid),
@@ -925,6 +924,8 @@ def _plot_cp_embeddings(qid, cg, mg, fg, embs, gnn_id, tsne, extra_dir, sort_id_
     # ])
     # 展平后降维，再恢复原结构（4类嵌入，每类形状为[num_samples, 2]）
     emb_flat = emb.reshape(-1, emb.shape[-1])  # 展平为[4*N, D]
+    scaler = StandardScaler()
+    emb_flat = scaler.fit_transform(emb_flat)
     emb_tsne = tsne.fit_transform(emb_flat)    # t-SNE降维到2D
     emb_2d = emb_tsne.reshape(4, -1, 2)        # 恢复为[4, N, 2]
 
@@ -1023,7 +1024,8 @@ def _plot_cp_embeddings(qid, cg, mg, fg, embs, gnn_id, tsne, extra_dir, sort_id_
     # --------------------------
     # 3. 绘制散点图和聚类半径
     # --------------------------
-    plt.figure(figsize=(8, 8))
+    fig = plt.figure(figsize=(10, 8))
+    # ax = fig.add_subplot(projection='3d')
     ax = plt.gca()
 
     # 绘制原始散点（保持原逻辑）
@@ -1054,23 +1056,6 @@ def _plot_cp_embeddings(qid, cg, mg, fg, embs, gnn_id, tsne, extra_dir, sort_id_
     #                       linestyle='-.', linewidth=2, label='FG Radius')
     #     ax.add_patch(circle_fg)
     # 绘制cg/mg/fg的聚类半径（圆圈）
-    if center_cg is not None:
-        # 绘制圆圈
-        circle_cg = Circle(center_cg, radius_cg, fill=False, edgecolor='blue', 
-                          linestyle='-', linewidth=2, label='Similar Graphs')
-        ax.add_patch(circle_cg)
-
-    if center_mg is not None:
-        # 绘制圆圈
-        circle_mg = Circle(center_mg, radius_mg, fill=False, edgecolor='purple', 
-                          linestyle='--', linewidth=2, label='MG Radius')
-        ax.add_patch(circle_mg)
-
-    if center_fg is not None:
-        # 绘制圆圈
-        circle_fg = Circle(center_fg, radius_fg, fill=False, edgecolor='red', 
-                          linestyle='-.', linewidth=2, label='Dissimilar Graphs')
-        ax.add_patch(circle_fg)
 
     # --------------------------
     # 4. 美化与保存
@@ -1078,12 +1063,13 @@ def _plot_cp_embeddings(qid, cg, mg, fg, embs, gnn_id, tsne, extra_dir, sort_id_
     plt.legend(loc='best', fontsize=10)
     ax.axes.get_xaxis().set_visible(False)  # 隐藏坐标轴
     ax.axes.get_yaxis().set_visible(False)
-    plt.tight_layout()
+    # plt.tight_layout()
 
     # 创建保存目录并保存图片
-    os.makedirs(extra_dir, exist_ok=True)
-    save_path = osp.join(extra_dir, f'qid_{qid}_gnn_{gnn_id}_with_radius.png')
-    plt.savefig(save_path, dpi=200, bbox_inches='tight')
+    extra_dir_ = osp.join(extra_dir, f'gnn_{gnn_id}')
+    os.makedirs(extra_dir_, exist_ok=True)
+    save_path = osp.join(extra_dir_, f'{gid}_gnn_{gnn_id}.png')
+    plt.savefig(save_path, dpi=200)
     plt.close()
     print('Saved to {}'.format(save_path))    
 

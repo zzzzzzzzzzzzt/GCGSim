@@ -43,12 +43,12 @@ class CPRGsim(nn.Module):
         self.swap_rate = self.config.get('swap_rate', 0.0)
         self.ppre_rate = self.config.get('ppre_rate', 0.0)
         end = None
-        if self.prep_rate > 0.0:
+        if self.prep_rate > 0.0 and self.training:
             pri_1, pri_2, end = self.batch_replicate(pri_1, pri_2, self.prep_rate, end)
             prep_num = end
-        if self.crep_rate > 0.0:
+        if self.crep_rate > 0.0 and self.training:
             com_1, com_2, end = self.batch_replicate(com_1, com_2, self.crep_rate, end)
-        if self.swap_rate > 0.0:
+        if self.swap_rate > 0.0 and self.training:
             pri_1, pri_2, end = self.batch_swap(pri_1, pri_2, self.swap_rate, end)
 
         if self.ex:
