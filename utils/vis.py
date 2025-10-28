@@ -100,7 +100,15 @@ def vis_graph_pair(g1, g2, info_dict, types, node1_maplist=None, node2_maplist=N
     pass      
 
 def vis_small(q=None, gs=None, info_dict=None, types = None):
-    fig = plt.figure(figsize=(9, 3))
+    n = int(len(gs)//2) + 1
+    subplot_size = info_dict['subplot_size']
+    wsize = info_dict['wbetween_space']*subplot_size
+    hszie = info_dict['hbetween_space']*subplot_size
+    wspace = wsize / subplot_size 
+    hspace = hszie / subplot_size 
+    fig_width = (subplot_size * n + wsize * (n-1))/(info_dict['right_space'] - info_dict['left_space'])
+    fig_hight = (subplot_size * 2 + hszie *1)/(1 - info_dict['top_space'] - info_dict['bottom_space'])
+    fig = plt.figure(figsize=(fig_width, fig_hight))
     _info_dict_preprocess(info_dict)
     nx_q = to_networkx(q, to_undirected=True)
     
@@ -136,19 +144,20 @@ def vis_small(q=None, gs=None, info_dict=None, types = None):
                     _list_safe_get(info_dict['each_graph_title_list'], i+1 , ""), 'title')
 
 
-    # plot setting
-    # plt.tight_layout()
-    left = 0.01  # the left side of the subplots of the figure
-    right = 0.99  # the right side of the subplots of the figure
-    top = 1 - info_dict['top_space']  # the top of the subplots of the figure
-    bottom = \
-        info_dict['bottom_space']  # the bottom of the subplots of the figure
-    wspace = \
-        info_dict['wbetween_space']  # the amount of width reserved for blank space between subplots
-    hspace = \
-        info_dict['hbetween_space']  # the amount of height reserved for white space between subplots
+    # # plot setting
+    # # plt.tight_layout()
+    # left = 0.01  # the left side of the subplots of the figure
+    # right = 0.99  # the right side of the subplots of the figure
+    # top = 1 - info_dict['top_space']  # the top of the subplots of the figure
+    # bottom = \
+    #     info_dict['bottom_space']  # the bottom of the subplots of the figure
+    # wspace = \
+    #     info_dict['wbetween_space']  # the amount of width reserved for blank space between subplots
+    # hspace = \
+    #     info_dict['hbetween_space']  # the amount of height reserved for white space between subplots
 
-    plt.subplots_adjust(left=left, bottom=bottom, right=right, top=top,
+    plt.subplots_adjust(left=info_dict['left_space'], bottom=info_dict['bottom_space'], 
+                        right=info_dict['right_space'], top=1-info_dict['top_space'],
                         wspace=wspace, hspace=hspace)
     draw_bottom_title(fig, grid, info_dict)
     axq_adjust(ax_q)

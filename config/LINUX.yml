@@ -9,7 +9,7 @@ CPRGsim:
   iter_val_start: 1
   iter_val_every: 1
   save_best: True
-  save_best_all: True
+  save_best_all: False
   multilabel: False
   patience: -1
   seed: 1234
@@ -75,7 +75,7 @@ CPRGsim:
   num_works: 10
   board_log: False
   reconstruction: False
-  sim_rat: True
+  sim_rat: False
   noise: True
   cat_disloss: False
   cat_NTN: False

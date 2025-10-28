@@ -33,7 +33,7 @@ class CPRGsim(nn.Module):
 
         if self.config['sim_rat']:
             com_1, com_2, pri_1, pri_2 = self.feature_distri(com_1, com_2, pri_1, pri_2, pool_1, pool_2)
-            self.com_1, self.com_2, self.pri_1, self.pri_2 = com_1, com_2, pri_1, pri_2
+        self.com_1, self.com_2, self.pri_1, self.pri_2 = com_1, com_2, pri_1, pri_2
             
         if self.config.get('use_mutualloss', False):
             minfo = self.statnet(com_1, com_2, pool_1, pool_2)

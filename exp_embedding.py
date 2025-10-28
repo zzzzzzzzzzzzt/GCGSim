@@ -924,8 +924,8 @@ def _plot_cp_embeddings(qid, gid, cg, mg, fg, embs, gnn_id, tsne, extra_dir, sor
     # ])
     # 展平后降维，再恢复原结构（4类嵌入，每类形状为[num_samples, 2]）
     emb_flat = emb.reshape(-1, emb.shape[-1])  # 展平为[4*N, D]
-    scaler = StandardScaler()
-    emb_flat = scaler.fit_transform(emb_flat)
+    # scaler = StandardScaler()
+    # emb_flat = scaler.fit_transform(emb_flat)
     emb_tsne = tsne.fit_transform(emb_flat)    # t-SNE降维到2D
     emb_2d = emb_tsne.reshape(4, -1, 2)        # 恢复为[4, N, 2]
 
@@ -1336,7 +1336,7 @@ def get_text_label_for_ranking(ds_metric, qid, j, norm, is_query, dataset, rankt
                     ds = unnormed_matrix[qid][gid]
             elif ranktype== 'pred':
                 if norm:
-                    ds = -1 * np.log(score_matrix[qid][gid]-1e-10)
+                    ds = np.abs(-1 * np.log(score_matrix[qid][gid]))
                 else:
                     raise NotImplementedError()
             rtn = '{:.2f}'.format(ds)
@@ -1398,7 +1398,7 @@ def get_norm_str(norm):
         return '_nonorm'
 
 def set_save_paths_for_vis(info_dict, extra_dir, fn, plt_cnt):
-    info_dict['plot_save_path_pdf'] = '{}/{}.{}'.format(extra_dir, fn, 'png')
+    info_dict['plot_save_path_pdf'] = '{}/{}.{}'.format(extra_dir, fn, 'pdf')
     plt_cnt += 1
     return info_dict, plt_cnt
 
@@ -1445,10 +1445,13 @@ def draw_ranking(args, testing_graphs, trainval_graphs,
         'each_graph_text_pos': [0.5, -0.2],
         'each_graph_text_from_pos': [0.5, -0.4],
         # graph padding: value range: [0, 1]
+        'left_space': 0.01,
+        'right_space': 0.99,
         'top_space': 0.1 if concise else 0.26,  # out of whole graph
         'bottom_space': 0.15,
         'hbetween_space': 0.5 if concise else 1,  # out of the subgraph
         'wbetween_space': 0.01,
+        'subplot_size':0.9,
         # plot config
         'plot_dpi': 200,
         'plot_save_path_eps': '',
@@ -1466,8 +1469,8 @@ def draw_ranking(args, testing_graphs, trainval_graphs,
             print('Too few train gs {}'.format(len(trainval_graphs)))
             return        
         # Choose the top 6 matches, the overall middle match, and the worst match.
-        selected_ids = list(range(5))  
-        selected_ids.extend([middle_idx, len(trainval_graphs)-2, len(trainval_graphs)-1])   
+        selected_ids = list(range(4))  
+        selected_ids.extend([middle_idx, 1098, 1099])   
         # Get the selected graphs from the groundtruth and the model.
         sort_id_mat_normed = np.argsort(gt_nGED, kind = 'mergesort')
         gids_groundtruth = np.array(sort_id_mat_normed[i][selected_ids])   
@@ -1499,7 +1502,7 @@ def draw_ranking(args, testing_graphs, trainval_graphs,
 
         text_metric = get_text_metric_from('ged', True)
         info_dict['each_graph_text_from_gt'] = 'Ground-truth {}'.format(text_metric)
-        info_dict['each_graph_text_from_pred'] = 'Predicted {} by {}'.format(text_metric, args.model_name)
+        info_dict['each_graph_text_from_pred'] = 'Predicted {} by {}'.format(text_metric, 'GCGSim')
 
         fn = '{}_{}_{}{}'.format(
             plot_what, 'astar', int(testing_graphs[i]['i']), get_norm_str(True))  # ranking_astar_i_norm
@@ -1607,7 +1610,7 @@ def draw_mapping(args, testing_graphs, trainval_graphs,
         'draw_node_label_font_size': 6,
         'draw_node_color_map': color_map ,
         'draw_node_color_mapdcit': node_mapdcit,
-        'get_map_mothed': 'l2',
+        'get_map_mothed': 'cosine',
         'map_norm': True,
         # draw edge config
         'draw_edge_label_enable': False,
@@ -1644,7 +1647,7 @@ def draw_mapping(args, testing_graphs, trainval_graphs,
     info_dict['each_graph_title_list'] = text
     info_dict['each_graph_text_list'] = ['Original\nGraphs', 'Similarity Heatmap']
     plt_cnt = 0
-    selected_ids = [0, 100, 200, 400, 400, 500]
+    selected_ids = [0, 1, 2, 4, 10, 20, 30 , 40, 50, 100]
     
     for g1_id in range(len(testing_graphs)):
         g1 = testing_graphs[g1_id]
@@ -1798,7 +1801,7 @@ if __name__ == "__main__":
     dataset                     = load_data(args, False)
     dataset                     . load(config)
     model                       = CPRGsim(config, dataset.input_dim).cuda()
-    para                        = osp.join(args.pretrain_path, 'CPRGsim_{}_checkpoint.pth'.format(args.dataset))
+    para                        = osp.join(args.pretrain_path, 'CPRGsim_{}_checkpoint_mse.pth'.format(args.dataset))
     model                       . load_state_dict(torch.load(para))
     model                       . eval()
 
@@ -1811,14 +1814,14 @@ if __name__ == "__main__":
     graph_embs,                 \
     node_embs,                  = evaluate(dataset.testing_graphs, dataset.trainval_graphs, model, dataset, config, True)
     # MINE(args, config, graph_embs)
-    plot_cp_embeddings(ground_truth, graph_embs, dataset)
+    # plot_cp_embeddings(ground_truth, graph_embs, dataset)
     # compri_sim(ground_truth_ged, graph_embs_dicts)
     # compri_dist_l2(ground_truth_ged, graph_embs_dicts, dataset)
     # nodecp_sim_matrix_hist_heat(prediction_mat, graph_embs_dicts, node_embs_dicts)
-    # draw_ranking(args, dataset.testing_graphs, dataset.trainval_graphs, 
-    #             ground_truth, ground_truth_ged, ground_truth_nged,
-    #             prediction_mat, None, model_path='', plot_node_ids=args.dataset=='AIDS700nef')
+    draw_ranking(args, dataset.testing_graphs, dataset.trainval_graphs, 
+                ground_truth, ground_truth_ged, ground_truth_nged,
+                prediction_mat, None, model_path='', plot_node_ids=False)
     # draw_mapping(args, dataset.testing_graphs, dataset.trainval_graphs, 
-    #             ground_truth_nged, graph_embs, node_embs, 'psgd',
+    #             ground_truth_nged, graph_embs, node_embs, 'gncm',
     #             plot_node_ids=args.dataset=='AIDS700nef')
     # cpembedding_singular(graph_embs_dicts)

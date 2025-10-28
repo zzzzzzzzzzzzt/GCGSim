@@ -1,7 +1,7 @@
 python exp_embedding.py \
---dataset AIDS700nef \
---pretrain_path model_saved/AIDS700nef/2025-09-18/CPRGsim_AIDS700nef_RGGC_4 \
---gpu_id 1 \
+--dataset IMDBMulti \
+--pretrain_path model_saved/IMDBMulti/2025-10-13/CPRGsim_IMDBMulti_RGGC_1 \
+--gpu_id 0 \
 --model_name CPRGsim
 
 
