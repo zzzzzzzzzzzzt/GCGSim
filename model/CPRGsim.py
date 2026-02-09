@@ -294,12 +294,12 @@ class CP_Generator(nn.Module):
         self.negative_slope     = 0.01
         if self.config['deepsets_inner_act'] == 'relu':
             self.act_inner      = F.relu
-        elif self.config['deepsets_inner_act'] == 'leaky_relu':
-            self.act_inner      = partial(F.leaky_relu, negative_slope=self.negative_slope)
+        elif self.config['deepsets_inner_act'] == 'gelu':
+            self.act_inner      = F.gelu
         if self.config['deepsets_outer_act'] == 'relu':
             self.act_outer      = F.relu
-        elif self.config['deepsets_outer_act'] == 'leaky_relu':
-            self.act_outer      = partial(F.leaky_relu, negative_slope=self.negative_slope)
+        elif self.config['deepsets_outer_act'] == 'gelu':
+            self.act_outer      = F.gelu
 
         self.setup_backbone()
         if self.config.get('setup_disentangle', True):
@@ -656,8 +656,8 @@ class CP_Generator(nn.Module):
             pool_2 = self._pool(deepsets_inner_2, batch2)
 
             if self.config.get('ngsa', True):
-                att_1with_2 = self.n2gatt(deepsets_inner_1, pool_2, batch1)
-                att_2with_1 = self.n2gatt(deepsets_inner_2, pool_1, batch2)
+                att_1with_2 = self.n2gatt(deepsets_inner_2, pool_1, batch2)
+                att_2with_1 = self.n2gatt(deepsets_inner_1, pool_2, batch1)
             else:
                 att_1with_2 = pool_2
                 att_2with_1 = pool_1

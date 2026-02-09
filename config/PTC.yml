@@ -33,7 +33,7 @@ CPRGsim:
   deepsets: True
   use_bn: False
   deepsets_inner_act: 'relu'
-  deepsets_outer_act: 'relu'
+  deepsets_outer_act: 'gelu'
   fuse_type: 'cat'
   pooling: 'add'
   reduction: 2
@@ -58,7 +58,7 @@ CPRGsim:
   swap_rate: 0.0
   crep_rate: 0.02
   prep_rate: 0.0
-  ppre_rate: 0.001
+  ppre_rate: 0.0001
   use_ff: False
   measure: 'JSD'
   model_name: 'GSC_GNN'

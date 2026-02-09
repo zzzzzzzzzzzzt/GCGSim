@@ -36,7 +36,7 @@ CPRGsim:
   deepsets: True
   use_bn: False
   deepsets_inner_act: "relu"      
-  deepsets_outer_act: "relu"
+  deepsets_outer_act: "gelu"
   fuse_type: "cat"       # 'add', 'stack', 'cat'
   pooling: 'add'     # 'add', 'mean'
   reduction: 2
